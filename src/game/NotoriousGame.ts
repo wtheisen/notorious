@@ -285,7 +285,7 @@ export const NotoriousGame: Game<NotoriousState> = {
       next: 'place'
     },
 
-    // PLACE PHASE: Players place captains on action slots
+    // PLACE PHASE: Players place captains on action slots (round-robin, one at a time)
     place: {
       onBegin: ({ G }) => {
         console.log('[PLACE] Phase started');
@@ -297,12 +297,25 @@ export const NotoriousGame: Game<NotoriousState> = {
         order: {
           first: () => 0,
           next: ({ G, ctx }) => {
-            // Custom turn order based on wind direction
-            if (G.windDirection === WindDirection.CLOCKWISE) {
-              return (ctx.playOrderPos + 1) % ctx.numPlayers;
-            } else {
-              return (ctx.playOrderPos - 1 + ctx.numPlayers) % ctx.numPlayers;
+            // Round-robin: find next player who still has captains to place
+            const numPlayers = ctx.numPlayers;
+            let nextPos = ctx.playOrderPos;
+
+            for (let i = 0; i < numPlayers; i++) {
+              if (G.windDirection === WindDirection.CLOCKWISE) {
+                nextPos = (nextPos + 1) % numPlayers;
+              } else {
+                nextPos = (nextPos - 1 + numPlayers) % numPlayers;
+              }
+
+              const nextPlayer = G.players[nextPos];
+              if (nextPlayer.placedCaptains.length < nextPlayer.captainCount) {
+                return nextPos;
+              }
             }
+
+            // All players done
+            return undefined;
           }
         }
       },
@@ -310,16 +323,19 @@ export const NotoriousGame: Game<NotoriousState> = {
       moves: {
         /**
          * Place a captain on an action slot
+         * Each player places ONE captain, then turn advances to next player
          */
-        placeCaptain: ({ G, ctx }: { G: NotoriousState; ctx: Ctx }, actionType: ActionType) => {
+        placeCaptain: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, actionType: ActionType) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
 
           if (!placeCaptain(player, actionType)) {
             return INVALID_MOVE;
           }
 
-          // Auto-end turn after placing captain
-          // Note: boardgame.io moves don't have events access, handled automatically
+          console.log(`[PLACE] Player ${parseInt(ctx.currentPlayer) + 1} placed captain on ${actionType}`);
+
+          // End turn after placing ONE captain - advances to next player
+          events?.endTurn();
         }
       },
 
