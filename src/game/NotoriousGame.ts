@@ -1026,11 +1026,10 @@ export const NotoriousGame: Game<NotoriousState> = {
           const power = getPowerStrategy(player.piratePower);
           const notoriety = power.modifyHexControlNotoriety(baseNotoriety);
 
+          console.log(`[PIRATE] ${player.name} (${power.name}): controls ${baseNotoriety} hex(es), gains ${notoriety} notoriety`);
+
           if (notoriety > 0) {
             gainNotoriety(player, notoriety);
-            console.log(`[PIRATE] ${player.name} gained ${notoriety} notoriety`);
-          } else if (baseNotoriety > 0) {
-            console.log(`[PIRATE] ${player.name} controls ${baseNotoriety} hex(es) but power prevents notoriety gain`);
           }
         });
 
