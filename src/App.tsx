@@ -114,7 +114,7 @@ export const App = () => {
     <div style={styles.app}>
       <h1 style={styles.title}>Notorious</h1>
       <div style={styles.singlePlayerContainer}>
-        <NotoriousClient playerID="0" />
+        <NotoriousClient />
       </div>
     </div>
   );
