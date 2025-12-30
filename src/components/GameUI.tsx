@@ -1102,14 +1102,27 @@ export const GameUI: React.FC<GameUIProps> = ({
                 );
               })()}
 
-              {/* Cancel button */}
+              {/* Cancel and Forfeit buttons */}
               {selectedAction && (
-                <button
-                  onClick={() => resetActionState()}
-                  style={{...styles.button, marginTop: '10px', width: '100%'}}
-                >
-                  Cancel Action
-                </button>
+                <div style={{ marginTop: '15px' }}>
+                  <button
+                    onClick={() => resetActionState()}
+                    style={{...styles.button, width: '100%'}}
+                  >
+                    Cancel (Pick Different Action)
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Forfeit this action? You will lose the captain without any effect.')) {
+                        moves.skipAction();
+                        resetActionState();
+                      }
+                    }}
+                    style={{...styles.forfeitButton, marginTop: '8px', width: '100%'}}
+                  >
+                    Forfeit Action (No Valid Targets)
+                  </button>
+                </div>
               )}
             </>
           ) : (
@@ -1371,6 +1384,16 @@ const styles: Record<string, React.CSSProperties> = {
     border: 'none',
     backgroundColor: '#4CAF50',
     color: '#fff',
+    borderRadius: '5px',
+    cursor: 'pointer'
+  },
+  forfeitButton: {
+    padding: '10px',
+    fontSize: '13px',
+    fontWeight: 'bold',
+    border: '2px solid #E24A4A',
+    backgroundColor: '#fff',
+    color: '#E24A4A',
     borderRadius: '5px',
     cursor: 'pointer'
   },
