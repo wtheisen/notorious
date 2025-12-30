@@ -6,6 +6,19 @@ import { getPlayerShips, getInfluence, getHexController, getIslandByName, findPa
 import { getPowerStrategy } from '../core/powers';
 import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../core/Chart';
 
+/**
+ * Get player color for UI elements
+ */
+function getPlayerColorForUI(playerId: string): string {
+  const colors: Record<string, string> = {
+    '0': '#4A90E2',  // Blue
+    '1': '#E24A4A',  // Red
+    '2': '#4AE290',  // Green
+    '3': '#E2D24A'   // Yellow
+  };
+  return colors[playerId] || '#888888';
+}
+
 interface GameUIProps {
   G: NotoriousState;
   ctx: any;
@@ -265,33 +278,80 @@ export const GameUI: React.FC<GameUIProps> = ({
         </div>
       )}
 
-      {/* PLACE Phase UI */}
-      {currentPhase === 'place' && isMyTurn && (
+      {/* PLACE Phase UI - Captain Placement Board */}
+      {currentPhase === 'place' && (
         <div style={styles.section}>
-          <h3 style={styles.subheader}>Place Captain</h3>
-          <p style={styles.info}>
-            Placed: {player.placedCaptains.length} / {player.captainCount}
-          </p>
-          <div style={styles.buttonGrid}>
-            {[ActionType.SAIL, ActionType.BUILD, ActionType.STEAL, ActionType.SINK, ActionType.CHART].map(action => (
-              <button
-                key={action}
-                onClick={() => moves.placeCaptain(action)}
-                disabled={player.placedCaptains.length >= player.captainCount}
-                style={{
-                  ...styles.button,
-                  ...(player.placedCaptains.length >= player.captainCount ? styles.buttonDisabled : {})
-                }}
-              >
-                {action}
-              </button>
+          <h3 style={styles.subheader}>Captain Placement</h3>
+          {isMyTurn ? (
+            <p style={styles.info}>
+              Your turn! Place captains: {player.placedCaptains.length} / {player.captainCount}
+            </p>
+          ) : (
+            <p style={styles.info}>
+              Waiting for Player {parseInt(ctx.currentPlayer) + 1}...
+            </p>
+          )}
+
+          {/* Action slots with captain indicators */}
+          <div style={styles.captainBoard}>
+            {[ActionType.SAIL, ActionType.BUILD, ActionType.STEAL, ActionType.SINK, ActionType.CHART].map(action => {
+              // Count captains per player for this action
+              const captainsByPlayer = G.players.map(p => ({
+                playerId: p.id,
+                playerName: p.name,
+                color: getPlayerColorForUI(p.id),
+                count: p.placedCaptains.filter(a => a === action).length
+              }));
+
+              const canPlace = isMyTurn && player.placedCaptains.length < player.captainCount;
+
+              return (
+                <div
+                  key={action}
+                  onClick={() => canPlace && moves.placeCaptain(action)}
+                  style={{
+                    ...styles.actionSlot,
+                    cursor: canPlace ? 'pointer' : 'default',
+                    backgroundColor: canPlace ? '#3a3a5e' : '#2a2a3e',
+                    border: canPlace ? '2px solid #4CAF50' : '2px solid #444'
+                  }}
+                >
+                  <div style={styles.actionName}>{action}</div>
+                  <div style={styles.captainIndicators}>
+                    {captainsByPlayer.map(({ playerId, color, count }) => (
+                      <div key={playerId} style={styles.playerCaptains}>
+                        {Array.from({ length: count }).map((_, i) => (
+                          <div
+                            key={i}
+                            style={{
+                              ...styles.captainDot,
+                              backgroundColor: color
+                            }}
+                            title={`Player ${parseInt(playerId) + 1}`}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Legend showing player colors */}
+          <div style={styles.playerLegend}>
+            {G.players.map(p => (
+              <div key={p.id} style={styles.legendItem}>
+                <div style={{
+                  ...styles.captainDot,
+                  backgroundColor: getPlayerColorForUI(p.id)
+                }} />
+                <span style={{ fontSize: '11px', color: '#aaa' }}>
+                  {p.name} ({p.placedCaptains.length}/{p.captainCount})
+                </span>
+              </div>
             ))}
           </div>
-          {player.placedCaptains.length > 0 && (
-            <div style={styles.info}>
-              <strong>Captains placed on:</strong> {player.placedCaptains.join(', ')}
-            </div>
-          )}
         </div>
       )}
 
@@ -856,5 +916,53 @@ const styles: Record<string, React.CSSProperties> = {
     color: '#fff',
     borderRadius: '5px',
     cursor: 'pointer'
+  },
+  // Captain placement board styles
+  captainBoard: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    marginTop: '10px'
+  },
+  actionSlot: {
+    padding: '10px',
+    borderRadius: '6px',
+    transition: 'all 0.2s'
+  },
+  actionName: {
+    fontWeight: 'bold',
+    fontSize: '14px',
+    color: '#fff',
+    marginBottom: '6px'
+  },
+  captainIndicators: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '4px',
+    minHeight: '20px'
+  },
+  playerCaptains: {
+    display: 'flex',
+    gap: '3px'
+  },
+  captainDot: {
+    width: '14px',
+    height: '14px',
+    borderRadius: '50%',
+    border: '2px solid rgba(255,255,255,0.5)'
+  },
+  playerLegend: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: '10px',
+    marginTop: '12px',
+    padding: '8px',
+    backgroundColor: '#2a2a3e',
+    borderRadius: '4px'
+  },
+  legendItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px'
   }
 };
