@@ -10,7 +10,7 @@ interface BoardProps {
   G: NotoriousState;
   ctx: any;
   moves: any;
-  playerID: string;
+  playerID?: string | null;  // Optional - defaults to "0" (human player)
   selectedAction: ActionType | null;
   selectedHex: HexCoord | null;
   onHexClick: (coord: HexCoord) => void;
@@ -143,6 +143,9 @@ function isValidHexForAction(
 export const Board: React.FC<BoardProps> = ({
   G, ctx, moves, playerID, selectedAction, selectedHex, onHexClick
 }) => {
+  // Default to player 0 (human player) if playerID not provided
+  const effectivePlayerID = playerID ?? '0';
+
   const centerX = 400;
   const centerY = 300;
   const svgWidth = 800;
@@ -180,10 +183,10 @@ export const Board: React.FC<BoardProps> = ({
 
         // Check if this hex is a valid target for current action or setup
         let isValidTarget = false;
-        if (ctx.phase === 'setup' && ctx.currentPlayer === playerID) {
-          isValidTarget = isValidHexForSetup(G, hex.coord, playerID);
-        } else if (ctx.phase === 'play' && ctx.currentPlayer === playerID && selectedAction) {
-          isValidTarget = isValidHexForAction(G, hex.coord, selectedAction, playerID, selectedHex, ctx);
+        if (ctx.phase === 'setup' && ctx.currentPlayer === effectivePlayerID) {
+          isValidTarget = isValidHexForSetup(G, hex.coord, effectivePlayerID);
+        } else if (ctx.phase === 'play' && ctx.currentPlayer === effectivePlayerID && selectedAction) {
+          isValidTarget = isValidHexForAction(G, hex.coord, selectedAction, effectivePlayerID, selectedHex, ctx);
         }
 
         // Determine visual styling

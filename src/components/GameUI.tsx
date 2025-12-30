@@ -10,7 +10,7 @@ interface GameUIProps {
   G: NotoriousState;
   ctx: any;
   moves: any;
-  playerID: string;
+  playerID?: string | null;  // Optional - defaults to "0" (human player)
   selectedAction: ActionType | null;
   setSelectedAction: (action: ActionType | null) => void;
   selectedHex: HexCoord | null;
@@ -138,7 +138,9 @@ export const GameUI: React.FC<GameUIProps> = ({
   const [sailMoves, setSailMoves] = useState<Array<{shipType: ShipType; from: HexCoord; to: HexCoord}>>([]);
   const [sailSourceHex, setSailSourceHex] = useState<HexCoord | null>(null);
 
-  const player = G.players.find(p => p.id === playerID);
+  // Default to player 0 (human player) if playerID not provided
+  const effectivePlayerID = playerID ?? '0';
+  const player = G.players.find(p => p.id === effectivePlayerID);
 
   // Reset action-specific state when action changes
   useEffect(() => {
@@ -155,7 +157,7 @@ export const GameUI: React.FC<GameUIProps> = ({
   useEffect(() => {
     if (selectedAction !== ActionType.SAIL || !selectedHex) return;
 
-    const playerShips = getPlayerShips(G.board, selectedHex, playerID);
+    const playerShips = getPlayerShips(G.board, selectedHex, effectivePlayerID);
 
     if (!sailSourceHex) {
       // First click - select source if player has ships there
@@ -165,7 +167,7 @@ export const GameUI: React.FC<GameUIProps> = ({
       }
     } else {
       // Second click - select destination and create move
-      const shipToMove = getPlayerShips(G.board, sailSourceHex, playerID)[0];
+      const shipToMove = getPlayerShips(G.board, sailSourceHex, effectivePlayerID)[0];
       if (shipToMove) {
         setSailMoves([...sailMoves, {
           shipType: shipToMove.type,
@@ -176,13 +178,13 @@ export const GameUI: React.FC<GameUIProps> = ({
         setSelectedHex(null);
       }
     }
-  }, [selectedHex, selectedAction, sailSourceHex, playerID, G.board]);
+  }, [selectedHex, selectedAction, sailSourceHex, effectivePlayerID, G.board]);
 
   if (!player) {
     return <div style={styles.container}>Loading...</div>;
   }
 
-  const isMyTurn = ctx.currentPlayer === playerID;
+  const isMyTurn = ctx.currentPlayer === effectivePlayerID;
   const currentPhase = ctx.phase;
 
   return (
@@ -411,7 +413,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                     <p>Click a hex where you have ships AND opponent has sloop</p>
                   ) : (() => {
                     const hex = G.board.hexes[hexToKey(selectedHex)];
-                    const opponentSloops = hex?.ships.filter(s => s.playerId !== playerID && s.type === ShipType.SLOOP) || [];
+                    const opponentSloops = hex?.ships.filter(s => s.playerId !== effectivePlayerID && s.type === ShipType.SLOOP) || [];
                     const targetPlayers = [...new Set(opponentSloops.map(s => s.playerId))];
                     return (
                       <>
@@ -464,9 +466,9 @@ export const GameUI: React.FC<GameUIProps> = ({
                     <p>Click a hex where you have ships AND opponent has ships</p>
                   ) : (() => {
                     const hex = G.board.hexes[hexToKey(selectedHex)];
-                    const opponentShips = hex?.ships.filter(s => s.playerId !== playerID) || [];
+                    const opponentShips = hex?.ships.filter(s => s.playerId !== effectivePlayerID) || [];
                     const targetPlayers = [...new Set(opponentShips.map(s => s.playerId))];
-                    const playerInfluence = getInfluence(G.board, selectedHex, playerID);
+                    const playerInfluence = getInfluence(G.board, selectedHex, effectivePlayerID);
 
                     return (
                       <>
@@ -613,7 +615,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                 <div style={{ marginTop: '10px' }}>
                   <strong>Your Charts:</strong>
                   {player.charts.map((chart, i) => {
-                    const claimStatus = getChartClaimStatus(chart, G, playerID);
+                    const claimStatus = getChartClaimStatus(chart, G, effectivePlayerID);
                     return (
                       <div key={i} style={{
                         ...styles.chart,
@@ -652,7 +654,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                 <div style={{ marginTop: '15px' }}>
                   <strong>Island Raids (Public):</strong>
                   {G.chartDeck.islandRaids.map((raid, i) => {
-                    const claimStatus = getChartClaimStatus(raid, G, playerID);
+                    const claimStatus = getChartClaimStatus(raid, G, effectivePlayerID);
                     return (
                       <div key={i} style={{
                         ...styles.chart,
@@ -723,7 +725,7 @@ export const GameUI: React.FC<GameUIProps> = ({
       {/* Other Players */}
       <div style={styles.section}>
         <h3 style={styles.subheader}>Other Players</h3>
-        {G.players.filter(p => p.id !== playerID).map(p => (
+        {G.players.filter(p => p.id !== effectivePlayerID).map(p => (
           <div key={p.id} style={styles.otherPlayer}>
             <div><strong>{p.name}</strong> ({getPowerStrategy(p.piratePower).name})</div>
             <div style={{ fontSize: '12px', color: '#666' }}>
