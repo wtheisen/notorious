@@ -1,4 +1,4 @@
-import { PlayerColor, ActionType, ShipType, WindDirection } from '../../types/GameTypes';
+import { PlayerColor, ActionType, ShipType, WindDirection, PiratePower } from '../../types/GameTypes';
 import { HexCoord } from '../../types/CoordinateTypes';
 import { AnyChart } from '../../core/Chart';
 import { Island } from '../../core/Island';
@@ -39,7 +39,7 @@ export interface PlayerState {
   name: string;
   color: PlayerColor;
   isAI: boolean;
-  pirateName: string;
+  piratePower: PiratePower;
 
   // Resources
   notoriety: number;

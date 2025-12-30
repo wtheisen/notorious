@@ -1,7 +1,8 @@
 import { Game, Ctx } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
 import { NotoriousState, PlayerState, BoardState, hexToKey, Ship } from './types/GameState';
-import { PlayerColor, ActionType, WindDirection, GAME_CONSTANTS, ShipType } from '../types/GameTypes';
+import { PlayerColor, ActionType, WindDirection, GAME_CONSTANTS, ShipType, PiratePower } from '../types/GameTypes';
+import { getPowerStrategy } from '../core/powers';
 import { HexCoord, hexEquals } from '../types/CoordinateTypes';
 import {
   gainNotoriety,
@@ -105,15 +106,26 @@ export const NotoriousGame: Game<NotoriousState> = {
   setup: ({ ctx, random }): NotoriousState => {
     console.log('[NotoriousGame] Setting up game');
 
+    // Randomly assign pirate powers to players
+    const allPowers = [
+      PiratePower.THE_SAILOR,
+      PiratePower.THE_PEACEFUL,
+      PiratePower.THE_RELENTLESS,
+      PiratePower.THE_ISLANDER
+    ];
+    const shuffledPowers = random!.Shuffle([...allPowers]);
+
     // Create players
     const players: PlayerState[] = ctx.playOrder.map((id, index) => {
       const colors = [PlayerColor.BLUE, PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW];
+      const power = shuffledPowers[index % shuffledPowers.length];
+      console.log(`[NotoriousGame] Player ${index + 1} assigned power: ${power}`);
       return {
         id,
         name: `Player ${parseInt(id) + 1}`,
         color: colors[index] || PlayerColor.BLUE,
         isAI: false,  // Will be set via matchmaking or config
-        pirateName: 'Generic Pirate',
+        piratePower: power,
 
         notoriety: 0,
         doubloons: GAME_CONSTANTS.STARTING_DOUBLOONS,
@@ -348,6 +360,8 @@ export const NotoriousGame: Game<NotoriousState> = {
          * Execute a SAIL action
          * Move 1 ship up to 2 hexes OR 2 ships 1 hex each
          * Bribe: Move an additional ship 1 hex
+         * The Sailor: Can move 3 hexes instead of 2
+         * The Islander: Can ignore impassable island edges
          */
         sail: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, moveData: SailMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
@@ -363,6 +377,16 @@ export const NotoriousGame: Game<NotoriousState> = {
             console.log('[SAIL] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
+
+          // Get player's power strategy for sail modifications
+          const power = getPowerStrategy(player.piratePower);
+          const maxDistance = power.getSailMaxDistance();
+
+          // Helper to check if sailing is valid between two adjacent hexes
+          // Power strategy can override this (e.g., Islander ignores island edges)
+          const canSailForPlayer = (from: HexCoord, to: HexCoord): boolean => {
+            return power.canSailBetween(G.board, from, to, () => canSailBetween(G.board, from, to));
+          };
 
           // Validate each move
           for (const move of moveData.moves) {
@@ -384,27 +408,40 @@ export const NotoriousGame: Game<NotoriousState> = {
 
             // Check path is valid
             const distance = hexDistance(move.from, move.to);
-            if (distance === 1) {
-              if (!canSailBetween(G.board, move.from, move.to)) {
+            if (distance === 0) {
+              console.log('[SAIL] Cannot sail to same hex');
+              return INVALID_MOVE;
+            } else if (distance > maxDistance) {
+              console.log(`[SAIL] Move distance too far (max ${maxDistance} for ${player.piratePower})`);
+              return INVALID_MOVE;
+            } else if (distance === 1) {
+              if (!canSailForPlayer(move.from, move.to)) {
                 console.log('[SAIL] Cannot sail between hexes (blocked by island edge)');
                 return INVALID_MOVE;
               }
-            } else if (distance === 2) {
-              // For 2-hex moves, find a valid intermediate hex
+            } else {
+              // For 2+ hex moves, find a valid path
               const neighbors = getNeighbors(G.board, move.from);
               const validPath = neighbors.some(neighbor => {
-                const neighborDistance = hexDistance(neighbor.coord, move.to);
-                return neighborDistance === 1 &&
-                  canSailBetween(G.board, move.from, neighbor.coord) &&
-                  canSailBetween(G.board, neighbor.coord, move.to);
+                if (!canSailForPlayer(move.from, neighbor.coord)) return false;
+                const remainingDistance = hexDistance(neighbor.coord, move.to);
+                if (remainingDistance === 0) return true;
+                if (remainingDistance === 1) return canSailForPlayer(neighbor.coord, move.to);
+                if (remainingDistance === 2 && distance === 3) {
+                  // For 3-hex moves, need another intermediate
+                  const secondNeighbors = getNeighbors(G.board, neighbor.coord);
+                  return secondNeighbors.some(n2 => {
+                    return canSailForPlayer(neighbor.coord, n2.coord) &&
+                      hexDistance(n2.coord, move.to) === 1 &&
+                      canSailForPlayer(n2.coord, move.to);
+                  });
+                }
+                return false;
               });
               if (!validPath) {
-                console.log('[SAIL] No valid 2-hex path found');
+                console.log(`[SAIL] No valid ${distance}-hex path found`);
                 return INVALID_MOVE;
               }
-            } else {
-              console.log('[SAIL] Move distance too far');
-              return INVALID_MOVE;
             }
           }
 
@@ -558,6 +595,10 @@ export const NotoriousGame: Game<NotoriousState> = {
           const opponent = G.players.find(p => p.id === stealData.targetPlayerId);
           if (opponent) {
             returnShips(opponent, 'sloops', 1);
+
+            // Trigger opponent's power passive (e.g., The Peaceful gains doubloon)
+            const opponentPower = getPowerStrategy(opponent.piratePower);
+            opponentPower.onShipStolen(opponent, player);
           }
 
           // Place player's sloop if requested
@@ -579,22 +620,36 @@ export const NotoriousGame: Game<NotoriousState> = {
          * Gain notoriety if opponent is at least as notorious as you
          * Bribe 1: Move a sloop 1 hex before sinking
          * Bribe 2: Sink an additional ship in the same hex
+         * The Peaceful: Cannot use this action
+         * The Relentless: Free sloop move before sinking (no bribe needed)
          */
         sink: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, sinkData: SinkMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
+          const power = getPowerStrategy(player.piratePower);
+
+          // Check if power allows SINK action (e.g., The Peaceful cannot)
+          if (!power.canUseSink()) {
+            console.log('[SINK] Power prevents using Sink action');
+            return INVALID_MOVE;
+          }
 
           const captainIndex = player.placedCaptains.indexOf(ActionType.SINK);
           if (captainIndex === -1) {
             return INVALID_MOVE;
           }
 
+          // Apply power's cost modification (e.g., Relentless gets free sloop move)
+          const actualBribesUsed = power.modifySinkCost(sinkData.bribesUsed, {
+            movingSloop: !!sinkData.moveSloopBefore
+          });
+
           // Validate bribes
-          if (sinkData.bribesUsed > player.doubloons) {
+          if (actualBribesUsed > player.doubloons) {
             console.log('[SINK] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
 
-          // Validate sloop movement if using bribe 1
+          // Validate sloop movement (used by bribe or Relentless power)
           if (sinkData.moveSloopBefore) {
             const fromHex = getHex(G.board, sinkData.moveSloopBefore.from);
             const toHex = getHex(G.board, sinkData.moveSloopBefore.to);
@@ -656,11 +711,11 @@ export const NotoriousGame: Game<NotoriousState> = {
           }
 
           // Execute: spend doubloons for bribes
-          if (sinkData.bribesUsed > 0) {
-            spendDoubloons(player, sinkData.bribesUsed);
+          if (actualBribesUsed > 0) {
+            spendDoubloons(player, actualBribesUsed);
           }
 
-          // Execute: move sloop if bribe 1 was used
+          // Execute: move sloop (may be free depending on power)
           if (sinkData.moveSloopBefore) {
             const sloop: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
             removeShip(G.board, sinkData.moveSloopBefore.from, sloop);
@@ -680,6 +735,10 @@ export const NotoriousGame: Game<NotoriousState> = {
             } else {
               returnShips(opponent, 'galleons', 1);
             }
+
+            // Trigger opponent's power passive (e.g., The Peaceful gains doubloon)
+            const opponentPower = getPowerStrategy(opponent.piratePower);
+            opponentPower.onShipSunk(opponent, sinkData.targetShipType, player);
           }
 
           // Calculate and award notoriety
@@ -704,6 +763,10 @@ export const NotoriousGame: Game<NotoriousState> = {
               } else {
                 returnShips(additionalOpponent, 'galleons', 1);
               }
+
+              // Trigger opponent's power passive (e.g., The Peaceful gains doubloon)
+              const additionalOpponentPower = getPowerStrategy(additionalOpponent.piratePower);
+              additionalOpponentPower.onShipSunk(additionalOpponent, sinkData.additionalSink.shipType, player);
             }
             console.log('[SINK] Sank additional ship');
           }
@@ -837,13 +900,20 @@ export const NotoriousGame: Game<NotoriousState> = {
       onBegin: ({ G, ctx, events }) => {
         console.log('[PIRATE] Phase started');
 
-        // Award notoriety for hex control
+        // Award notoriety for hex control (power can modify this)
         G.players.forEach(player => {
           const controlledHexes = getControlledHexes(G.board, player.id);
-          const notoriety = controlledHexes.length;
+          const baseNotoriety = controlledHexes.length;
+
+          // Apply power modification (e.g., The Relentless gets 0)
+          const power = getPowerStrategy(player.piratePower);
+          const notoriety = power.modifyHexControlNotoriety(baseNotoriety);
+
           if (notoriety > 0) {
             gainNotoriety(player, notoriety);
             console.log(`[PIRATE] ${player.name} gained ${notoriety} notoriety`);
+          } else if (baseNotoriety > 0) {
+            console.log(`[PIRATE] ${player.name} controls ${baseNotoriety} hex(es) but power prevents notoriety gain`);
           }
         });
 

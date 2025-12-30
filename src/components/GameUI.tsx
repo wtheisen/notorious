@@ -3,6 +3,7 @@ import { NotoriousState, hexToKey } from '../game/types/GameState';
 import { ActionType, ShipType, ChartType } from '../types/GameTypes';
 import { HexCoord, hexEquals } from '../types/CoordinateTypes';
 import { getPlayerShips, getInfluence, getHexController, getIslandByName, findPathOnBoard } from '../game/logic/BoardLogic';
+import { getPowerStrategy } from '../core/powers';
 import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../core/Chart';
 
 interface GameUIProps {
@@ -189,6 +190,13 @@ export const GameUI: React.FC<GameUIProps> = ({
       {/* Player Info */}
       <div style={styles.section}>
         <h2 style={styles.header}>{player.name}</h2>
+        {/* Pirate Power */}
+        <div style={styles.powerBox}>
+          <strong>{getPowerStrategy(player.piratePower).name}</strong>
+          <div style={styles.powerDescription}>
+            {getPowerStrategy(player.piratePower).description}
+          </div>
+        </div>
         <div style={styles.stat}>
           <span style={styles.statLabel}>Notoriety:</span>
           <span style={styles.statValue}>{player.notoriety} / 24</span>
@@ -717,7 +725,10 @@ export const GameUI: React.FC<GameUIProps> = ({
         <h3 style={styles.subheader}>Other Players</h3>
         {G.players.filter(p => p.id !== playerID).map(p => (
           <div key={p.id} style={styles.otherPlayer}>
-            <strong>{p.name}:</strong> {p.notoriety} notoriety, {p.doubloons} doubloons
+            <div><strong>{p.name}</strong> ({getPowerStrategy(p.piratePower).name})</div>
+            <div style={{ fontSize: '12px', color: '#666' }}>
+              {p.notoriety} notoriety, {p.doubloons} doubloons
+            </div>
           </div>
         ))}
       </div>
@@ -745,6 +756,19 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 0 15px 0',
     fontSize: '24px',
     color: '#333'
+  },
+  powerBox: {
+    padding: '10px',
+    marginBottom: '15px',
+    backgroundColor: '#e8f4f8',
+    borderRadius: '6px',
+    borderLeft: '4px solid #4A90E2'
+  },
+  powerDescription: {
+    fontSize: '12px',
+    color: '#666',
+    marginTop: '4px',
+    fontStyle: 'italic'
   },
   subheader: {
     margin: '0 0 10px 0',

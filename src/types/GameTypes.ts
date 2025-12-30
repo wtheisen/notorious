@@ -49,6 +49,23 @@ export enum ChartType {
 }
 
 /**
+ * Pirate Powers - unique abilities for each player
+ */
+export enum PiratePower {
+  /** Can move ships 3 hexes instead of 2 during SAIL action */
+  THE_SAILOR = 'THE_SAILOR',
+  /** Can't take SINK actions, gains 1 doubloon when their ship is sunk */
+  THE_PEACEFUL = 'THE_PEACEFUL',
+  /** Free sloop move before SINK action, doesn't gain notoriety for hex control */
+  THE_RELENTLESS = 'THE_RELENTLESS',
+  /** Can ignore impassable island edges */
+  THE_ISLANDER = 'THE_ISLANDER'
+}
+
+// Power name and description now come from PiratePowerStrategy classes
+// Use getPowerStrategy(power).name and .description instead
+
+/**
  * Player colors
  */
 export enum PlayerColor {
