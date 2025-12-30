@@ -36,18 +36,48 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
   }
 
   // PLACE PHASE: Place captains on actions
+  // Only offer actions that the AI can actually execute!
   if (ctx.phase === 'place') {
-    const availableActions = [
-      ActionType.BUILD,
-      ActionType.SAIL,
-      ActionType.STEAL,
-      ActionType.SINK,
-      ActionType.CHART
-    ];
-
-    // Can place captain if we have captains left
     if (player.placedCaptains.length < player.captainCount) {
-      for (const action of availableActions) {
+      const viableActions: ActionType[] = [];
+
+      // SAIL: viable if player has ships on the board
+      const playerHexesWithShips = Object.values(G.board.hexes).filter(hex =>
+        hex.ships.some(s => s.playerId === ctx.currentPlayer)
+      );
+      if (playerHexesWithShips.length > 0) {
+        viableActions.push(ActionType.SAIL);
+      }
+
+      // BUILD: viable if player has ships in inventory
+      if (player.ships.sloops >= 2 || player.ships.galleons >= 1) {
+        viableActions.push(ActionType.BUILD);
+      }
+
+      // STEAL: viable if there's a hex where player has ships AND opponent has sloop
+      const canSteal = Object.values(G.board.hexes).some(hex => {
+        const hasPlayerShip = hex.ships.some(s => s.playerId === ctx.currentPlayer);
+        const hasEnemySloop = hex.ships.some(s => s.playerId !== ctx.currentPlayer && s.type === ShipType.SLOOP);
+        return hasPlayerShip && hasEnemySloop;
+      });
+      if (canSteal) {
+        viableActions.push(ActionType.STEAL);
+      }
+
+      // SINK: viable if there's a hex where player has ships AND opponent has any ship
+      const canSink = Object.values(G.board.hexes).some(hex => {
+        const hasPlayerShip = hex.ships.some(s => s.playerId === ctx.currentPlayer);
+        const hasEnemyShip = hex.ships.some(s => s.playerId !== ctx.currentPlayer);
+        return hasPlayerShip && hasEnemyShip;
+      });
+      if (canSink) {
+        viableActions.push(ActionType.SINK);
+      }
+
+      // CHART: always viable
+      viableActions.push(ActionType.CHART);
+
+      for (const action of viableActions) {
         moves.push({ move: 'placeCaptain', args: [action] });
       }
     }
