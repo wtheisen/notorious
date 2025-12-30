@@ -84,6 +84,9 @@ export interface NotoriousState {
   // Game end tracking - finish the round when someone reaches 24 notoriety
   gameEndTriggered: boolean;
 
+  // Pirate phase tracking - counts how many players have finished claiming
+  piratePhaseTurnsComplete: number;
+
   // Phase and turn tracking is handled by boardgame.io ctx
   // We don't need currentPhase, activePlayerIndex, etc.
 }

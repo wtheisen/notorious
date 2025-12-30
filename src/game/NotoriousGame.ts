@@ -197,7 +197,8 @@ export const NotoriousGame: Game<NotoriousState> = {
       windDirection: WindDirection.CLOCKWISE,
       windTokenHolder: null,
       setupComplete: new Array(ctx.numPlayers).fill(false),
-      gameEndTriggered: false
+      gameEndTriggered: false,
+      piratePhaseTurnsComplete: 0
     };
   },
 
@@ -1009,6 +1010,9 @@ export const NotoriousGame: Game<NotoriousState> = {
       onBegin: ({ G, ctx, events }) => {
         console.log('[PIRATE] Phase started');
 
+        // Reset pirate phase turn tracker
+        G.piratePhaseTurnsComplete = 0;
+
         // Award notoriety for hex control (power can modify this)
         G.players.forEach(player => {
           const controlledHexes = getControlledHexes(G.board, player.id);
@@ -1226,16 +1230,16 @@ export const NotoriousGame: Game<NotoriousState> = {
         /**
          * End turn during Pirate phase (done claiming charts)
          */
-        doneClaiming: ({ events }: { events: any }) => {
+        doneClaiming: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }) => {
+          G.piratePhaseTurnsComplete++;
+          console.log(`[PIRATE] Player ${parseInt(ctx.currentPlayer) + 1} done claiming. ${G.piratePhaseTurnsComplete}/${ctx.numPlayers} complete`);
           events?.endTurn();
         }
       },
 
       // End when all players have had a turn
-      endIf: ({ ctx }) => {
-        // We use automatic turn tracking - phase ends after each player gets a turn
-        // This is handled by boardgame.io's turn system
-        return false;  // Let doneClaiming handle turn advancement
+      endIf: ({ G, ctx }) => {
+        return G.piratePhaseTurnsComplete >= ctx.numPlayers;
       },
 
       // After all players have claimed, return to place phase
