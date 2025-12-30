@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Client } from 'boardgame.io/react';
-import { Local } from 'boardgame.io/multiplayer';
 import { NotoriousGame } from './game/NotoriousGame';
 import { Board } from './components/Board';
 import { GameUI } from './components/GameUI';
@@ -19,11 +18,8 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
 
-  // AI move handling - only in Player 0's view to avoid duplicate moves
+  // AI move handling - automatically execute moves for AI players
   useEffect(() => {
-    // Only execute AI from player 0's view to prevent duplicate moves
-    if (playerID !== '0') return;
-
     // Check if it's an AI's turn
     const isAITurn = AI_PLAYER_IDS.includes(ctx.currentPlayer);
     if (isAITurn && !ctx.gameover) {
@@ -54,7 +50,7 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
 
       return () => clearTimeout(timer);
     }
-  }, [ctx.currentPlayer, ctx.phase, ctx.turn, G, moves, playerID, ctx.gameover]);
+  }, [ctx.currentPlayer, ctx.phase, ctx.turn, G, moves, ctx.gameover]);
 
   // Handle hex clicks from the board
   const handleHexClick = (coord: HexCoord) => {
@@ -100,12 +96,12 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
 /**
  * Create the boardgame.io Client
  * 4 players: 1 human (Player 1) + 3 AIs
+ * No multiplayer - single client controls all players (AI handled via useEffect)
  */
 const NotoriousClient = Client({
   game: NotoriousGame,
   board: NotoriousBoard,
   numPlayers: 4,
-  multiplayer: Local(),  // Local multiplayer for testing
   debug: true  // Enable debug panel
 });
 
