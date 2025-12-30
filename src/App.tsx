@@ -8,8 +8,8 @@ import { ActionType } from './types/GameTypes';
 import { HexCoord } from './types/CoordinateTypes';
 import { enumerateMoves } from './game/ai/NotoriousBot';
 
-// AI Player ID - Player 2 (index 1) is AI controlled
-const AI_PLAYER_ID = '1';
+// AI Player IDs - Players 1, 2, 3 are AI controlled (player 0 is human)
+const AI_PLAYER_IDS = ['1', '2', '3'];
 
 /**
  * Main game board component that combines the hex board and UI
@@ -19,29 +19,36 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
 
-  // AI move handling - only in Player 1's view to avoid duplicate moves
+  // AI move handling - only in Player 0's view to avoid duplicate moves
   useEffect(() => {
     // Only execute AI from player 0's view to prevent duplicate moves
     if (playerID !== '0') return;
 
-    // Check if it's the AI's turn
-    if (ctx.currentPlayer === AI_PLAYER_ID && !ctx.gameover) {
+    // Check if it's an AI's turn
+    const isAITurn = AI_PLAYER_IDS.includes(ctx.currentPlayer);
+    if (isAITurn && !ctx.gameover) {
       const aiDelay = 500; // Half second delay for AI moves
 
       const timer = setTimeout(() => {
         // Get possible moves for AI
         const possibleMoves = enumerateMoves(G, ctx);
 
+        console.log(`[AI Player ${ctx.currentPlayer}] Phase: ${ctx.phase}, Possible moves:`, possibleMoves.length);
+
         if (possibleMoves.length > 0) {
           // Pick a random move
           const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
 
-          console.log('[AI] Executing move:', randomMove.move, randomMove.args);
+          console.log(`[AI Player ${ctx.currentPlayer}] Executing:`, randomMove.move, randomMove.args);
 
           // Execute the move
           if (moves[randomMove.move]) {
             moves[randomMove.move](...randomMove.args);
+          } else {
+            console.error(`[AI] Move not found:`, randomMove.move);
           }
+        } else {
+          console.warn(`[AI Player ${ctx.currentPlayer}] No valid moves found!`);
         }
       }, aiDelay);
 
