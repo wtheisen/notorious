@@ -262,6 +262,10 @@ export const NotoriousGame: Game<NotoriousState> = {
           // Place the port
           setPortLocation(player, portHex);
 
+          // Add port as a "ship" for influence calculation (PORT type has influence 3)
+          const port: Ship = { type: ShipType.PORT, playerId: ctx.currentPlayer };
+          placeShip(G.board, portHex, port);
+
           // Place 2 sloops at the port location
           const sloop1: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
           const sloop2: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
