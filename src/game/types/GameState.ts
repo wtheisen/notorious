@@ -81,6 +81,9 @@ export interface NotoriousState {
   // Setup phase tracking
   setupComplete: boolean[];  // Track which players have completed setup
 
+  // Game end tracking - finish the round when someone reaches 24 notoriety
+  gameEndTriggered: boolean;
+
   // Phase and turn tracking is handled by boardgame.io ctx
   // We don't need currentPhase, activePlayerIndex, etc.
 }

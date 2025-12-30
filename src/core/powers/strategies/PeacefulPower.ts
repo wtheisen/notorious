@@ -13,6 +13,7 @@ export class PeacefulPower extends BasePiratePower {
   readonly id = PiratePower.THE_PEACEFUL;
   readonly name = 'The Peaceful';
   readonly description = "Can't take Sink actions. Gains 1 doubloon when their ship is sunk.";
+  readonly bounty = 750;  // From rulebook
 
   canUseSink(): boolean {
     return false;

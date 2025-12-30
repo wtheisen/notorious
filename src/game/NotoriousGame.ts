@@ -14,7 +14,8 @@ import {
   spendShips,
   returnShips,
   gainDoubloons,
-  setPortLocation
+  setPortLocation,
+  getFinalScore
 } from './logic/PlayerLogic';
 import {
   createEmptyBoard,
@@ -76,16 +77,16 @@ interface SinkMoveData {
   hex: HexCoord;
   targetShipType: ShipType;
   targetPlayerId: string;
-  bribesUsed: number;
-  moveSloopBefore?: { from: HexCoord; to: HexCoord };  // Bribe 1
-  additionalSink?: { shipType: ShipType; playerId: string };  // Bribe 2
+  // Bribe type 1 (repeatable): Move sloops before sinking
+  sloopMovesBefore: { from: HexCoord; to: HexCoord }[];
+  // Bribe type 2 (repeatable): Sink additional ships in same hex
+  additionalSinks: { shipType: ShipType; playerId: string }[];
 }
 
 /** CHART action move data */
 interface ChartMoveData {
-  bribesUsed: number;
-  drawExtra: boolean;  // Bribe 1: draw 3 instead of 2
-  keepExtra: boolean;  // Bribe 2: keep 2 instead of 1
+  // Each bribe: either draw 1 more OR keep 1 more (repeatable)
+  bribeChoices: ('draw' | 'keep')[];
   selectedChartIds?: string[];  // Charts to keep (if selection phase)
 }
 
@@ -120,11 +121,12 @@ export const NotoriousGame: Game<NotoriousState> = {
       const colors = [PlayerColor.BLUE, PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW];
       const power = shuffledPowers[index % shuffledPowers.length];
       console.log(`[NotoriousGame] Player ${index + 1} assigned power: ${power}`);
+      const isAIPlayer = index > 0; // Player 2+ are AI controlled
       return {
         id,
-        name: `Player ${parseInt(id) + 1}`,
+        name: isAIPlayer ? `AI Player ${parseInt(id) + 1}` : `Player ${parseInt(id) + 1}`,
         color: colors[index] || PlayerColor.BLUE,
-        isAI: false,  // Will be set via matchmaking or config
+        isAI: isAIPlayer,
         piratePower: power,
 
         notoriety: 0,
@@ -194,7 +196,8 @@ export const NotoriousGame: Game<NotoriousState> = {
       chartDeck,
       windDirection: WindDirection.CLOCKWISE,
       windTokenHolder: null,
-      setupComplete: new Array(ctx.numPlayers).fill(false)
+      setupComplete: new Array(ctx.numPlayers).fill(false),
+      gameEndTriggered: false
     };
   },
 
@@ -358,9 +361,9 @@ export const NotoriousGame: Game<NotoriousState> = {
       moves: {
         /**
          * Execute a SAIL action
-         * Move 1 ship up to 2 hexes OR 2 ships 1 hex each
-         * Bribe: Move an additional ship 1 hex
-         * The Sailor: Can move 3 hexes instead of 2
+         * Base: Move 1 ship up to 2 hexes OR 2 ships 1 hex each (= 2 movement points)
+         * Bribe (repeatable): Move a Ship one Hex (= 1 movement point each)
+         * The Sailor: Can move up to 3 hexes instead of 2
          * The Islander: Can ignore impassable island edges
          */
         sail: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, moveData: SailMoveData) => {
@@ -372,15 +375,33 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // Validate bribes
+          // Get player's power strategy for sail modifications
+          const power = getPowerStrategy(player.piratePower);
+          const maxDistance = power.getSailMaxDistance();
+
+          // Calculate total movement points used
+          // Each hex of movement costs 1 point
+          let totalMovementPoints = 0;
+          for (const move of moveData.moves) {
+            const distance = hexDistance(move.from, move.to);
+            totalMovementPoints += distance;
+          }
+
+          // Base action gives 2 movement points, each bribe gives 1 more
+          const basePoints = 2;
+          const bribesNeeded = Math.max(0, totalMovementPoints - basePoints);
+
+          // Validate bribes match what's needed
+          if (moveData.bribesUsed < bribesNeeded) {
+            console.log(`[SAIL] Need ${bribesNeeded} bribes for ${totalMovementPoints} movement points, only ${moveData.bribesUsed} provided`);
+            return INVALID_MOVE;
+          }
+
+          // Validate player has enough doubloons
           if (moveData.bribesUsed > player.doubloons) {
             console.log('[SAIL] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
-
-          // Get player's power strategy for sail modifications
-          const power = getPowerStrategy(player.piratePower);
-          const maxDistance = power.getSailMaxDistance();
 
           // Helper to check if sailing is valid between two adjacent hexes
           // Power strategy can override this (e.g., Islander ignores island edges)
@@ -467,8 +488,8 @@ export const NotoriousGame: Game<NotoriousState> = {
 
         /**
          * Execute a BUILD action
-         * Place 2 Sloops or 1 Galleon in a hex with your pieces (or your port)
-         * Bribe: Place an additional Sloop
+         * Base: Place 2 Sloops OR 1 Galleon in a hex with your pieces (or your port)
+         * Bribe (repeatable): Place an additional Sloop
          */
         build: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, buildData: BuildMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
@@ -479,7 +500,33 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // Validate bribes
+          // Count ships to place
+          const sloopsToPlace = buildData.placements.filter(s => s === ShipType.SLOOP).length;
+          const galleonsToPlace = buildData.placements.filter(s => s === ShipType.GALLEON).length;
+
+          // Can only place 1 Galleon (bribes only add Sloops)
+          if (galleonsToPlace > 1) {
+            console.log('[BUILD] Can only place 1 Galleon per action');
+            return INVALID_MOVE;
+          }
+
+          // Calculate bribes needed:
+          // - If placing a Galleon: base is 1 Galleon, bribes = number of Sloops
+          // - If placing only Sloops: base is 2 Sloops, bribes = max(0, sloops - 2)
+          let bribesNeeded: number;
+          if (galleonsToPlace === 1) {
+            bribesNeeded = sloopsToPlace;  // Each additional sloop costs 1 bribe
+          } else {
+            bribesNeeded = Math.max(0, sloopsToPlace - 2);  // First 2 sloops are base
+          }
+
+          // Validate bribes match what's needed
+          if (buildData.bribesUsed < bribesNeeded) {
+            console.log(`[BUILD] Need ${bribesNeeded} bribes, only ${buildData.bribesUsed} provided`);
+            return INVALID_MOVE;
+          }
+
+          // Validate player has enough doubloons
           if (buildData.bribesUsed > player.doubloons) {
             console.log('[BUILD] Not enough doubloons for bribes');
             return INVALID_MOVE;
@@ -616,12 +663,12 @@ export const NotoriousGame: Game<NotoriousState> = {
 
         /**
          * Execute a SINK action
-         * Remove opponent's ship in a hex with your pieces
+         * Base: Remove one opponent's ship in a hex with your pieces
          * Gain notoriety if opponent is at least as notorious as you
-         * Bribe 1: Move a sloop 1 hex before sinking
-         * Bribe 2: Sink an additional ship in the same hex
+         * Bribe type 1 (repeatable): Move a sloop 1 hex before sinking
+         * Bribe type 2 (repeatable): Sink an additional ship in the same hex
          * The Peaceful: Cannot use this action
-         * The Relentless: Free sloop move before sinking (no bribe needed)
+         * The Relentless: First sloop move is free
          */
         sink: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, sinkData: SinkMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
@@ -638,38 +685,38 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // Apply power's cost modification (e.g., Relentless gets free sloop move)
-          const actualBribesUsed = power.modifySinkCost(sinkData.bribesUsed, {
-            movingSloop: !!sinkData.moveSloopBefore
-          });
+          // Calculate bribes needed
+          // Bribe type 1: each sloop move costs 1 (Relentless gets first one free)
+          // Bribe type 2: each additional sink costs 1
+          const sloopMoves = sinkData.sloopMovesBefore?.length || 0;
+          const additionalSinks = sinkData.additionalSinks?.length || 0;
+
+          // Apply power's cost modification for sloop moves (Relentless gets first free)
+          const sloopMoveBribes = power.modifySinkCost(sloopMoves, { movingSloop: sloopMoves > 0 });
+          const totalBribesNeeded = sloopMoveBribes + additionalSinks;
 
           // Validate bribes
-          if (actualBribesUsed > player.doubloons) {
-            console.log('[SINK] Not enough doubloons for bribes');
+          if (totalBribesNeeded > player.doubloons) {
+            console.log(`[SINK] Need ${totalBribesNeeded} doubloons, only have ${player.doubloons}`);
             return INVALID_MOVE;
           }
 
-          // Validate sloop movement (used by bribe or Relentless power)
-          if (sinkData.moveSloopBefore) {
-            const fromHex = getHex(G.board, sinkData.moveSloopBefore.from);
-            const toHex = getHex(G.board, sinkData.moveSloopBefore.to);
+          // Validate all sloop movements
+          for (const sloopMove of sinkData.sloopMovesBefore || []) {
+            const fromHex = getHex(G.board, sloopMove.from);
+            const toHex = getHex(G.board, sloopMove.to);
 
             if (!fromHex || !toHex) {
               console.log('[SINK] Invalid sloop movement hexes');
               return INVALID_MOVE;
             }
 
-            if (!canSailBetween(G.board, sinkData.moveSloopBefore.from, sinkData.moveSloopBefore.to)) {
+            if (!canSailBetween(G.board, sloopMove.from, sloopMove.to)) {
               console.log('[SINK] Cannot move sloop along this path');
               return INVALID_MOVE;
             }
 
-            const hasSloop = getPlayerShips(G.board, sinkData.moveSloopBefore.from, ctx.currentPlayer)
-              .some(s => s.type === ShipType.SLOOP);
-            if (!hasSloop) {
-              console.log('[SINK] No sloop to move');
-              return INVALID_MOVE;
-            }
+            // Note: We check sloop presence during execution since earlier moves affect later ones
           }
 
           const hex = getHex(G.board, sinkData.hex);
@@ -678,13 +725,15 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // For validation, we need to consider the board state AFTER the optional sloop move
-          // We'll do this by checking if sloop movement would result in player having pieces there
+          // Check player will have pieces at target after sloop moves
           let playerHasPiecesAtTarget = getPlayerShips(G.board, sinkData.hex, ctx.currentPlayer).length > 0;
 
-          // If moving sloop to target hex, that will give us presence
-          if (sinkData.moveSloopBefore && hexEquals(sinkData.moveSloopBefore.to, sinkData.hex)) {
-            playerHasPiecesAtTarget = true;
+          // If any sloop moves to target hex, that will give us presence
+          for (const sloopMove of sinkData.sloopMovesBefore || []) {
+            if (hexEquals(sloopMove.to, sinkData.hex)) {
+              playerHasPiecesAtTarget = true;
+              break;
+            }
           }
 
           if (!playerHasPiecesAtTarget) {
@@ -692,86 +741,78 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // Check target has the ship to sink
-          const targetShips = getPlayerShips(G.board, sinkData.hex, sinkData.targetPlayerId);
-          const hasTargetShip = targetShips.some(s => s.type === sinkData.targetShipType);
-          if (!hasTargetShip) {
-            console.log('[SINK] Target ship not found in hex');
-            return INVALID_MOVE;
-          }
+          // Build list of all ships to sink (base + additional)
+          const allShipsToSink = [
+            { shipType: sinkData.targetShipType, playerId: sinkData.targetPlayerId },
+            ...(sinkData.additionalSinks || [])
+          ];
 
-          // If sinking a Galleon, check influence requirement
-          if (sinkData.targetShipType === ShipType.GALLEON) {
-            const playerInfluence = getInfluence(G.board, sinkData.hex, ctx.currentPlayer);
-            const targetInfluence = getInfluence(G.board, sinkData.hex, sinkData.targetPlayerId);
-            if (playerInfluence < targetInfluence) {
-              console.log('[SINK] Not enough influence to sink Galleon');
+          // Validate all target ships exist
+          for (const target of allShipsToSink) {
+            const targetShips = getPlayerShips(G.board, sinkData.hex, target.playerId);
+            const shipCount = targetShips.filter(s => s.type === target.shipType).length;
+            const neededCount = allShipsToSink.filter(
+              t => t.playerId === target.playerId && t.shipType === target.shipType
+            ).length;
+
+            if (shipCount < neededCount) {
+              console.log(`[SINK] Not enough ${target.shipType}s from player ${target.playerId} to sink`);
               return INVALID_MOVE;
+            }
+
+            // If sinking a Galleon, check influence requirement
+            if (target.shipType === ShipType.GALLEON) {
+              const playerInfluence = getInfluence(G.board, sinkData.hex, ctx.currentPlayer);
+              const targetInfluence = getInfluence(G.board, sinkData.hex, target.playerId);
+              if (playerInfluence < targetInfluence) {
+                console.log('[SINK] Not enough influence to sink Galleon');
+                return INVALID_MOVE;
+              }
             }
           }
 
           // Execute: spend doubloons for bribes
-          if (actualBribesUsed > 0) {
-            spendDoubloons(player, actualBribesUsed);
+          if (totalBribesNeeded > 0) {
+            spendDoubloons(player, totalBribesNeeded);
           }
 
-          // Execute: move sloop (may be free depending on power)
-          if (sinkData.moveSloopBefore) {
+          // Execute: move all sloops
+          for (const sloopMove of sinkData.sloopMovesBefore || []) {
             const sloop: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
-            removeShip(G.board, sinkData.moveSloopBefore.from, sloop);
-            placeShip(G.board, sinkData.moveSloopBefore.to, sloop);
-            console.log('[SINK] Moved sloop before sinking');
+            removeShip(G.board, sloopMove.from, sloop);
+            placeShip(G.board, sloopMove.to, sloop);
+            console.log(`[SINK] Moved sloop from (${sloopMove.from.q},${sloopMove.from.r}) to (${sloopMove.to.q},${sloopMove.to.r})`);
           }
 
-          // Execute: sink the target ship
-          const shipToSink: Ship = { type: sinkData.targetShipType, playerId: sinkData.targetPlayerId };
-          removeShip(G.board, sinkData.hex, shipToSink);
+          // Execute: sink all target ships
+          let totalNotorietyGained = 0;
+          for (const target of allShipsToSink) {
+            const shipToSink: Ship = { type: target.shipType, playerId: target.playerId };
+            removeShip(G.board, sinkData.hex, shipToSink);
 
-          // Return ship to opponent's inventory
-          const opponent = G.players.find(p => p.id === sinkData.targetPlayerId);
-          if (opponent) {
-            if (sinkData.targetShipType === ShipType.SLOOP) {
-              returnShips(opponent, 'sloops', 1);
-            } else {
-              returnShips(opponent, 'galleons', 1);
-            }
-
-            // Trigger opponent's power passive (e.g., The Peaceful gains doubloon)
-            const opponentPower = getPowerStrategy(opponent.piratePower);
-            opponentPower.onShipSunk(opponent, sinkData.targetShipType, player);
-          }
-
-          // Calculate and award notoriety
-          let notorietyGained = 0;
-          if (opponent && opponent.notoriety >= player.notoriety) {
-            notorietyGained = sinkData.targetShipType === ShipType.SLOOP ? 1 : 3;
-            gainNotoriety(player, notorietyGained);
-          }
-
-          // Execute: sink additional ship if bribe 2 was used
-          if (sinkData.additionalSink) {
-            const additionalShip: Ship = {
-              type: sinkData.additionalSink.shipType,
-              playerId: sinkData.additionalSink.playerId
-            };
-            removeShip(G.board, sinkData.hex, additionalShip);
-
-            const additionalOpponent = G.players.find(p => p.id === sinkData.additionalSink!.playerId);
-            if (additionalOpponent) {
-              if (sinkData.additionalSink.shipType === ShipType.SLOOP) {
-                returnShips(additionalOpponent, 'sloops', 1);
+            // Return ship to opponent's inventory
+            const opponent = G.players.find(p => p.id === target.playerId);
+            if (opponent) {
+              if (target.shipType === ShipType.SLOOP) {
+                returnShips(opponent, 'sloops', 1);
               } else {
-                returnShips(additionalOpponent, 'galleons', 1);
+                returnShips(opponent, 'galleons', 1);
               }
 
               // Trigger opponent's power passive (e.g., The Peaceful gains doubloon)
-              const additionalOpponentPower = getPowerStrategy(additionalOpponent.piratePower);
-              additionalOpponentPower.onShipSunk(additionalOpponent, sinkData.additionalSink.shipType, player);
+              const opponentPower = getPowerStrategy(opponent.piratePower);
+              opponentPower.onShipSunk(opponent, target.shipType, player);
+
+              // Calculate and award notoriety
+              if (opponent.notoriety >= player.notoriety) {
+                const notoriety = target.shipType === ShipType.SLOOP ? 1 : 3;
+                gainNotoriety(player, notoriety);
+                totalNotorietyGained += notoriety;
+              }
             }
-            console.log('[SINK] Sank additional ship');
           }
 
-          console.log(`[SINK] Sank ${sinkData.targetShipType}, gained ${notorietyGained} notoriety`);
+          console.log(`[SINK] Sank ${allShipsToSink.length} ship(s), gained ${totalNotorietyGained} notoriety`);
 
           player.placedCaptains.splice(captainIndex, 1);
           events?.endTurn();
@@ -779,9 +820,8 @@ export const NotoriousGame: Game<NotoriousState> = {
 
         /**
          * Execute a CHART action
-         * Draw 2 charts, keep 1. Gain the Wind Token.
-         * Bribe 1: Draw 3 instead of 2
-         * Bribe 2: Keep 2 instead of 1
+         * Base: Draw 2 charts, keep 1. Gain the Wind Token.
+         * Bribe (repeatable): Either draw 1 more chart OR keep 1 more chart
          */
         chart: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, chartData: ChartMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
@@ -791,14 +831,29 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          // Validate bribes
-          if (chartData.bribesUsed > player.doubloons) {
-            console.log('[CHART] Not enough doubloons for bribes');
+          // Calculate draw and keep counts based on bribes
+          // Base: draw 2, keep 1
+          // Each 'draw' bribe: +1 to draw
+          // Each 'keep' bribe: +1 to keep
+          const bribes = chartData.bribeChoices || [];
+          const bribesUsed = bribes.length;
+          const extraDraw = bribes.filter(b => b === 'draw').length;
+          const extraKeep = bribes.filter(b => b === 'keep').length;
+
+          const drawCount = 2 + extraDraw;
+          const keepCount = 1 + extraKeep;
+
+          // Validate: can't keep more than you draw
+          if (keepCount > drawCount) {
+            console.log('[CHART] Cannot keep more charts than drawn');
             return INVALID_MOVE;
           }
 
-          const drawCount = chartData.drawExtra ? 3 : 2;
-          const keepCount = chartData.keepExtra ? 2 : 1;
+          // Validate bribes
+          if (bribesUsed > player.doubloons) {
+            console.log('[CHART] Not enough doubloons for bribes');
+            return INVALID_MOVE;
+          }
 
           // Check if we have charts to draw (reshuffle discard if needed)
           if (G.chartDeck.drawPile.length < drawCount) {
@@ -823,8 +878,8 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
 
             // Execute: spend doubloons for bribes
-            if (chartData.bribesUsed > 0) {
-              spendDoubloons(player, chartData.bribesUsed);
+            if (bribesUsed > 0) {
+              spendDoubloons(player, bribesUsed);
             }
 
             // Draw charts from the deck
@@ -852,8 +907,8 @@ export const NotoriousGame: Game<NotoriousState> = {
             console.log('[CHART] No chart selection provided - auto-selecting first charts');
 
             // Execute: spend doubloons for bribes
-            if (chartData.bribesUsed > 0) {
-              spendDoubloons(player, chartData.bribesUsed);
+            if (bribesUsed > 0) {
+              spendDoubloons(player, bribesUsed);
             }
 
             // Draw charts from the deck
@@ -932,10 +987,11 @@ export const NotoriousGame: Game<NotoriousState> = {
           console.log('[PIRATE] Player reached 12 notoriety - 2nd Island Raid revealed');
         }
 
-        // Check for game end
-        const winner = G.players.find(p => hasPlayerWon(p));
-        if (winner) {
-          events?.endGame({ winner: winner.id });
+        // Check if game end is triggered (someone reached 24)
+        // Don't end immediately - finish the round first
+        if (!G.gameEndTriggered && G.players.some(p => hasPlayerWon(p))) {
+          G.gameEndTriggered = true;
+          console.log('[PIRATE] Game end triggered! Finishing round...');
         }
       },
 
@@ -1103,9 +1159,11 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
           }
 
-          // Check for game end after claiming
-          if (hasPlayerWon(player)) {
-            events?.endGame({ winner: player.id });
+          // Check if game end is triggered (someone reached 24)
+          // Game will end after the round completes
+          if (!G.gameEndTriggered && hasPlayerWon(player)) {
+            G.gameEndTriggered = true;
+            console.log('[CLAIM] Game end triggered! Finishing round...');
           }
 
           // Don't end turn - player may claim more charts
@@ -1136,13 +1194,69 @@ export const NotoriousGame: Game<NotoriousState> = {
   },
 
   /**
-   * Win condition
+   * Win condition - triggers at end of round when gameEndTriggered is true
+   * Final score = Notoriety + Doubloons
+   * Tiebreaker: Bounty → Notoriety → Islands controlled → Galleons on board
    */
   endIf: ({ G }) => {
-    const winner = G.players.find(p => hasPlayerWon(p));
-    if (winner) {
-      return { winner: winner.id };
+    // Only end game after round completes (pirate phase sets this flag)
+    if (!G.gameEndTriggered) {
+      return;
     }
+
+    // Calculate final scores and determine winner
+    const playerScores = G.players.map(player => {
+      const finalScore = getFinalScore(player);
+      const power = getPowerStrategy(player.piratePower);
+      const bounty = power.bounty;
+
+      // Count islands controlled by this player
+      const controlledHexes = getControlledHexes(G.board, player.id);
+      const islandsControlled = controlledHexes.filter(hex => hex.island !== null).length;
+
+      // Count galleons on board
+      let galleonsOnBoard = 0;
+      Object.values(G.board.hexes).forEach(hex => {
+        hex.ships.forEach(ship => {
+          if (ship.playerId === player.id && ship.type === ShipType.GALLEON) {
+            galleonsOnBoard++;
+          }
+        });
+      });
+
+      return {
+        playerId: player.id,
+        playerName: player.name,
+        finalScore,
+        bounty,
+        notoriety: player.notoriety,
+        islandsControlled,
+        galleonsOnBoard
+      };
+    });
+
+    // Sort by tiebreaker rules: Score → Bounty → Notoriety → Islands → Galleons
+    playerScores.sort((a, b) => {
+      // Higher score wins
+      if (b.finalScore !== a.finalScore) return b.finalScore - a.finalScore;
+      // Higher bounty wins (tiebreaker 1)
+      if (b.bounty !== a.bounty) return b.bounty - a.bounty;
+      // Higher notoriety wins (tiebreaker 2)
+      if (b.notoriety !== a.notoriety) return b.notoriety - a.notoriety;
+      // More islands controlled wins (tiebreaker 3)
+      if (b.islandsControlled !== a.islandsControlled) return b.islandsControlled - a.islandsControlled;
+      // More galleons wins (tiebreaker 4)
+      return b.galleonsOnBoard - a.galleonsOnBoard;
+    });
+
+    const winner = playerScores[0];
+    console.log('[GAME END] Final scores:', playerScores);
+    console.log(`[GAME END] Winner: ${winner.playerName} with score ${winner.finalScore}`);
+
+    return {
+      winner: winner.playerId,
+      finalScores: playerScores
+    };
   },
 
   /**

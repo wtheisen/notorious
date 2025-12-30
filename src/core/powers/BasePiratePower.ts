@@ -12,6 +12,7 @@ export abstract class BasePiratePower implements PiratePowerStrategy {
   abstract readonly id: PiratePower;
   abstract readonly name: string;
   abstract readonly description: string;
+  abstract readonly bounty: number;
 
   // === SAIL ACTION (defaults) ===
   getSailMaxDistance(): number {

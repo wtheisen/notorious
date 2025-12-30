@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Client } from 'boardgame.io/react';
 import { Local } from 'boardgame.io/multiplayer';
 import { NotoriousGame } from './game/NotoriousGame';
@@ -6,6 +6,10 @@ import { Board } from './components/Board';
 import { GameUI } from './components/GameUI';
 import { ActionType } from './types/GameTypes';
 import { HexCoord } from './types/CoordinateTypes';
+import { enumerateMoves } from './game/ai/NotoriousBot';
+
+// AI Player ID - Player 2 (index 1) is AI controlled
+const AI_PLAYER_ID = '1';
 
 /**
  * Main game board component that combines the hex board and UI
@@ -14,6 +18,36 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   // Shared state for action execution
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
+
+  // AI move handling - only in Player 1's view to avoid duplicate moves
+  useEffect(() => {
+    // Only execute AI from player 0's view to prevent duplicate moves
+    if (playerID !== '0') return;
+
+    // Check if it's the AI's turn
+    if (ctx.currentPlayer === AI_PLAYER_ID && !ctx.gameover) {
+      const aiDelay = 500; // Half second delay for AI moves
+
+      const timer = setTimeout(() => {
+        // Get possible moves for AI
+        const possibleMoves = enumerateMoves(G, ctx);
+
+        if (possibleMoves.length > 0) {
+          // Pick a random move
+          const randomMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+
+          console.log('[AI] Executing move:', randomMove.move, randomMove.args);
+
+          // Execute the move
+          if (moves[randomMove.move]) {
+            moves[randomMove.move](...randomMove.args);
+          }
+        }
+      }, aiDelay);
+
+      return () => clearTimeout(timer);
+    }
+  }, [ctx.currentPlayer, ctx.phase, ctx.turn, G, moves, playerID, ctx.gameover]);
 
   // Handle hex clicks from the board
   const handleHexClick = (coord: HexCoord) => {
@@ -58,33 +92,26 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
 
 /**
  * Create the boardgame.io Client
- * For local development/testing with multiple players in same browser
+ * 4 players: 1 human (Player 1) + 3 AIs
  */
 const NotoriousClient = Client({
   game: NotoriousGame,
   board: NotoriousBoard,
-  numPlayers: 2,
+  numPlayers: 4,
   multiplayer: Local(),  // Local multiplayer for testing
   debug: true  // Enable debug panel
 });
 
 /**
  * Main App component
- * Renders two player views side-by-side for local testing
+ * Single human player view - AIs are controlled automatically
  */
 export const App = () => {
   return (
     <div style={styles.app}>
-      <h1 style={styles.title}>Notorious - boardgame.io Edition</h1>
-      <div style={styles.playersContainer}>
-        <div style={styles.playerView}>
-          <h2 style={styles.playerTitle}>Player 1</h2>
-          <NotoriousClient playerID="0" />
-        </div>
-        <div style={styles.playerView}>
-          <h2 style={styles.playerTitle}>Player 2</h2>
-          <NotoriousClient playerID="1" />
-        </div>
+      <h1 style={styles.title}>Notorious</h1>
+      <div style={styles.singlePlayerContainer}>
+        <NotoriousClient playerID="0" />
       </div>
     </div>
   );
@@ -103,24 +130,13 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '20px',
     fontSize: '32px'
   },
-  playersContainer: {
-    display: 'flex',
-    gap: '20px',
-    justifyContent: 'center',
-    flexWrap: 'wrap'
-  },
-  playerView: {
+  singlePlayerContainer: {
+    maxWidth: '1200px',
+    margin: '0 auto',
     border: '2px solid #333',
     borderRadius: '8px',
     overflow: 'hidden',
     backgroundColor: '#2a2a3e'
-  },
-  playerTitle: {
-    margin: 0,
-    padding: '10px',
-    backgroundColor: '#333',
-    color: '#fff',
-    textAlign: 'center'
   },
   container: {
     display: 'flex',

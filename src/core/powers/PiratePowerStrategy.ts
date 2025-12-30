@@ -13,6 +13,8 @@ export interface PiratePowerStrategy {
   readonly name: string;
   /** Description shown in UI */
   readonly description: string;
+  /** Bounty value for tiebreaking (0-1000 doubloons, increments of 25) */
+  readonly bounty: number;
 
   // === SAIL ACTION ===
   /** Max hexes a ship can move (default: 2) */

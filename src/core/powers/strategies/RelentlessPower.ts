@@ -11,6 +11,7 @@ export class RelentlessPower extends BasePiratePower {
   readonly id = PiratePower.THE_RELENTLESS;
   readonly name = 'The Relentless';
   readonly description = "Can move a Sloop one Hex before Sink action. Doesn't gain Notoriety for controlling Hexes.";
+  readonly bounty = 400;
 
   modifySinkCost(baseCost: number, options: { movingSloop: boolean }): number {
     // First sloop move is free when doing a sink action

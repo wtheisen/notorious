@@ -13,6 +13,7 @@ export class IslanderPower extends BasePiratePower {
   readonly id = PiratePower.THE_ISLANDER;
   readonly name = 'The Islander';
   readonly description = 'Can ignore impassable Island edges when sailing.';
+  readonly bounty = 550;
 
   canSailBetween(
     board: BoardState,

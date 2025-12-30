@@ -166,3 +166,10 @@ export function hasChart(player: PlayerState, chartId: string): boolean {
 export function getChartCount(player: PlayerState): number {
   return player.charts.length;
 }
+
+/**
+ * Check if any player has triggered game end (reached 24 notoriety)
+ */
+export function hasAnyPlayerTriggeredEnd(players: PlayerState[]): boolean {
+  return players.some(p => p.notoriety >= GAME_CONSTANTS.WINNING_NOTORIETY);
+}
