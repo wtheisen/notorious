@@ -965,9 +965,34 @@ export const NotoriousGame: Game<NotoriousState> = {
         },
 
         /**
-         * Skip turn if player has no captains or wants to pass
+         * Skip/forfeit the current action when it can't be executed
+         * Consumes the captain but does nothing - it's a missed action
          */
-        pass: ({ events }: { events: any }) => {
+        skipAction: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }) => {
+          const player = G.players[parseInt(ctx.currentPlayer)];
+
+          if (player.placedCaptains.length === 0) {
+            return INVALID_MOVE;
+          }
+
+          // Remove the captain (forfeit the action)
+          const skippedAction = player.placedCaptains.pop();
+          console.log(`[SKIP] Player ${parseInt(ctx.currentPlayer) + 1} forfeited ${skippedAction} action (no valid targets)`);
+
+          events?.endTurn();
+        },
+
+        /**
+         * Pass turn (only valid if player has no captains left)
+         */
+        pass: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }) => {
+          const player = G.players[parseInt(ctx.currentPlayer)];
+
+          // Can only pass if no captains left
+          if (player.placedCaptains.length > 0) {
+            return INVALID_MOVE;
+          }
+
           events?.endTurn();
         }
       },

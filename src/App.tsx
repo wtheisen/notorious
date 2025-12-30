@@ -29,8 +29,10 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
       // Prevent infinite loops - only try once per turn
       const turnKey = { player: ctx.currentPlayer, turn: ctx.turn };
       if (lastAIMove && lastAIMove.player === turnKey.player && lastAIMove.turn === turnKey.turn) {
-        console.log(`[AI] Already tried this turn, passing...`);
-        if (moves.pass) {
+        console.log(`[AI] Already tried this turn, skipping action...`);
+        if (moves.skipAction) {
+          moves.skipAction();
+        } else if (moves.pass) {
           moves.pass();
         }
         return;
@@ -56,12 +58,14 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           if (moves[randomMove.move]) {
             moves[randomMove.move](...randomMove.args);
           } else {
-            console.error(`[AI] Move not found:`, randomMove.move, '- passing instead');
-            if (moves.pass) moves.pass();
+            console.error(`[AI] Move not found:`, randomMove.move, '- skipping action');
+            if (moves.skipAction) moves.skipAction();
+            else if (moves.pass) moves.pass();
           }
         } else {
-          console.warn(`[AI Player ${ctx.currentPlayer}] No valid moves found - passing`);
-          if (moves.pass) moves.pass();
+          console.warn(`[AI Player ${ctx.currentPlayer}] No valid moves found - skipping action`);
+          if (moves.skipAction) moves.skipAction();
+          else if (moves.pass) moves.pass();
         }
       }, aiDelay);
 
