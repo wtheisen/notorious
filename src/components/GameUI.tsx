@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { NotoriousState, hexToKey } from '../game/types/GameState';
+import { NotoriousState, hexToKey, Ship } from '../game/types/GameState';
 import { ActionType, ShipType, ChartType } from '../types/GameTypes';
 import { HexCoord, hexEquals } from '../types/CoordinateTypes';
 import { getPlayerShips, getInfluence, getHexController, getIslandByName, findPathOnBoard } from '../game/logic/BoardLogic';
+import { hexDistance } from '../utils/HexMath';
 import { getPowerStrategy } from '../core/powers';
 import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../core/Chart';
+import { SailState } from '../App';
 
 /**
  * Get player color for UI elements
@@ -29,6 +31,8 @@ interface GameUIProps {
   selectedHex: HexCoord | null;
   setSelectedHex: (hex: HexCoord | null) => void;
   resetActionState: () => void;
+  sailState: SailState;
+  setSailState: (state: SailState) => void;
 }
 
 /**
@@ -135,7 +139,8 @@ function getChartDescription(chart: AnyChart): string {
  */
 export const GameUI: React.FC<GameUIProps> = ({
   G, ctx, moves, playerID,
-  selectedAction, setSelectedAction, selectedHex, setSelectedHex, resetActionState
+  selectedAction, setSelectedAction, selectedHex, setSelectedHex, resetActionState,
+  sailState, setSailState
 }) => {
   // Action-specific state
   const [buildShipType, setBuildShipType] = useState<'sloops' | 'galleon'>('sloops');
@@ -144,12 +149,11 @@ export const GameUI: React.FC<GameUIProps> = ({
   const [stealReplace, setStealReplace] = useState(true);
   const [sinkTargetPlayer, setSinkTargetPlayer] = useState<string | null>(null);
   const [sinkTargetShip, setSinkTargetShip] = useState<ShipType>(ShipType.SLOOP);
+  const [sinkAdditionalTargets, setSinkAdditionalTargets] = useState<Array<{ shipType: ShipType; playerId: string }>>([]);
+  const [sinkSloopMoves, setSinkSloopMoves] = useState<Array<{ from: HexCoord; to: HexCoord }>>([]);
+  const [sinkSloopMoveSource, setSinkSloopMoveSource] = useState<HexCoord | null>(null);
   const [chartDrawExtra, setChartDrawExtra] = useState(false);
   const [chartKeepExtra, setChartKeepExtra] = useState(false);
-
-  // SAIL action state
-  const [sailMoves, setSailMoves] = useState<Array<{shipType: ShipType; from: HexCoord; to: HexCoord}>>([]);
-  const [sailSourceHex, setSailSourceHex] = useState<HexCoord | null>(null);
 
   // Default to player 0 (human player) if playerID not provided
   const effectivePlayerID = playerID ?? '0';
@@ -162,8 +166,9 @@ export const GameUI: React.FC<GameUIProps> = ({
     setStealReplace(true);
     setSinkTargetPlayer(null);
     setSinkTargetShip(ShipType.SLOOP);
-    setSailMoves([]);
-    setSailSourceHex(null);
+    setSinkAdditionalTargets([]);
+    setSinkSloopMoves([]);
+    setSinkSloopMoveSource(null);
   }, [selectedAction]);
 
   // Handle SAIL action hex clicks
@@ -171,27 +176,51 @@ export const GameUI: React.FC<GameUIProps> = ({
     if (selectedAction !== ActionType.SAIL || !selectedHex) return;
 
     const playerShips = getPlayerShips(G.board, selectedHex, effectivePlayerID);
+    const movableShips = playerShips.filter(s => s.type !== ShipType.PORT);
 
-    if (!sailSourceHex) {
-      // First click - select source if player has ships there
-      if (playerShips.length > 0) {
-        setSailSourceHex(selectedHex);
-        setSelectedHex(null); // Clear selection to prepare for destination
-      }
-    } else {
-      // Second click - select destination and create move
-      const shipToMove = getPlayerShips(G.board, sailSourceHex, effectivePlayerID)[0];
-      if (shipToMove) {
-        setSailMoves([...sailMoves, {
-          shipType: shipToMove.type,
-          from: sailSourceHex,
-          to: selectedHex
-        }]);
-        setSailSourceHex(null);
+    // Step 1: No ship selected yet - clicked on a hex with player's ships
+    if (!sailState.selectedShip && !sailState.sourceHex) {
+      if (movableShips.length > 0) {
+        // Auto-select if only one ship, otherwise set source for ship picker
+        if (movableShips.length === 1) {
+          setSailState({
+            ...sailState,
+            sourceHex: selectedHex,
+            selectedShip: movableShips[0]
+          });
+        } else {
+          // Multiple ships - show ship picker (sourceHex set, no ship yet)
+          setSailState({
+            ...sailState,
+            sourceHex: selectedHex,
+            selectedShip: null
+          });
+        }
         setSelectedHex(null);
       }
+      return;
     }
-  }, [selectedHex, selectedAction, sailSourceHex, effectivePlayerID, G.board]);
+
+    // Step 2: Source hex set but no ship selected (multiple ships case)
+    // Ship selection is handled in the UI dialog, not here
+
+    // Step 3: Ship selected - this is a destination click
+    if (sailState.selectedShip && sailState.sourceHex) {
+      // Add this move to planned moves
+      const newMove = {
+        shipType: sailState.selectedShip.type,
+        from: sailState.sourceHex,
+        to: selectedHex
+      };
+      setSailState({
+        ...sailState,
+        plannedMoves: [...sailState.plannedMoves, newMove],
+        sourceHex: null,
+        selectedShip: null
+      });
+      setSelectedHex(null);
+    }
+  }, [selectedHex, selectedAction, sailState, effectivePlayerID, G.board, setSailState, setSelectedHex]);
 
   if (!player) {
     return <div style={styles.container}>Loading...</div>;
@@ -469,181 +498,595 @@ export const GameUI: React.FC<GameUIProps> = ({
               {selectedAction === ActionType.STEAL && (
                 <div style={styles.actionDialog}>
                   <strong>STEAL Action</strong>
-                  {!selectedHex ? (
-                    <p>Click a hex where you have ships AND opponent has sloop</p>
-                  ) : (() => {
+                  <div style={styles.sailInfo}>
+                    Take an opponent's sloop and send it back to their inventory
+                  </div>
+
+                  {/* Step 1: Select hex */}
+                  {!selectedHex && (
+                    <div style={styles.sailStep}>
+                      <div style={styles.stepNumber}>1</div>
+                      <p>Click a hex where you have ships AND an opponent has a sloop (highlighted in green)</p>
+                    </div>
+                  )}
+
+                  {/* Step 2: Configure steal */}
+                  {selectedHex && (() => {
                     const hex = G.board.hexes[hexToKey(selectedHex)];
                     const opponentSloops = hex?.ships.filter(s => s.playerId !== effectivePlayerID && s.type === ShipType.SLOOP) || [];
                     const targetPlayers = [...new Set(opponentSloops.map(s => s.playerId))];
+                    const selectedTarget = stealTargetPlayer || targetPlayers[0];
+                    const targetPlayer = G.players.find(p => p.id === selectedTarget);
+
                     return (
-                      <>
-                        <p>Stealing at ({selectedHex.q}, {selectedHex.r})</p>
-                        {targetPlayers.length > 1 && (
-                          <div>
-                            <p>Select target:</p>
-                            {targetPlayers.map(pid => (
-                              <button
-                                key={pid}
-                                onClick={() => setStealTargetPlayer(pid)}
-                                style={{...styles.button, ...(stealTargetPlayer === pid ? styles.buttonSelected : {})}}
-                              >
-                                Player {parseInt(pid) + 1}
-                              </button>
-                            ))}
+                      <div style={styles.sailStep}>
+                        <div style={styles.stepNumber}>2</div>
+                        <p style={{ marginBottom: '10px' }}>
+                          Stealing at ({selectedHex.q}, {selectedHex.r})
+                        </p>
+
+                        {/* Target player selection */}
+                        {targetPlayers.length > 1 ? (
+                          <div style={{ marginBottom: '12px' }}>
+                            <p style={{ fontSize: '13px', marginBottom: '6px' }}>Select target player:</p>
+                            <div style={styles.shipPicker}>
+                              {targetPlayers.map(pid => {
+                                const p = G.players.find(pl => pl.id === pid);
+                                return (
+                                  <button
+                                    key={pid}
+                                    onClick={() => setStealTargetPlayer(pid)}
+                                    style={{
+                                      ...styles.shipButton,
+                                      borderColor: getPlayerColorForUI(pid),
+                                      backgroundColor: stealTargetPlayer === pid ? getPlayerColorForUI(pid) : '#fff',
+                                      color: stealTargetPlayer === pid ? '#fff' : getPlayerColorForUI(pid)
+                                    }}
+                                  >
+                                    {p?.name || `Player ${parseInt(pid) + 1}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+                            <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: getPlayerColorForUI(selectedTarget), marginRight: '8px' }}></span>
+                            Stealing from <strong>{targetPlayer?.name || `Player ${parseInt(selectedTarget) + 1}`}</strong>
                           </div>
                         )}
-                        <label style={styles.checkboxLabel}>
-                          <input
-                            type="checkbox"
-                            checked={stealReplace}
-                            onChange={(e) => setStealReplace(e.target.checked)}
-                            disabled={player.ships.sloops < 1}
-                          />
-                          Replace with your sloop
-                        </label>
+
+                        {/* Replace option */}
+                        <div style={{ padding: '10px', backgroundColor: '#fff', borderRadius: '6px', border: '1px solid #ddd', marginBottom: '12px' }}>
+                          <label style={{ ...styles.checkboxLabel, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={stealReplace}
+                              onChange={(e) => setStealReplace(e.target.checked)}
+                              disabled={player.ships.sloops < 1}
+                            />
+                            <span>
+                              Replace with your sloop
+                              {player.ships.sloops < 1 && <span style={{ color: '#E24A4A', fontSize: '12px' }}> (no sloops available)</span>}
+                            </span>
+                          </label>
+                        </div>
+
                         <button
                           onClick={() => {
-                            const target = stealTargetPlayer || targetPlayers[0];
-                            moves.steal({ hex: selectedHex, targetPlayerId: target, replaceWithSloop: stealReplace });
+                            moves.steal({ hex: selectedHex, targetPlayerId: selectedTarget, replaceWithSloop: stealReplace });
                             resetActionState();
                           }}
                           style={styles.executeButton}
                           disabled={targetPlayers.length === 0}
                         >
-                          Steal Sloop
+                          Steal Sloop {stealReplace ? '& Replace' : ''}
                         </button>
-                      </>
+
+                        <button
+                          onClick={() => setSelectedHex(null)}
+                          style={{ ...styles.button, marginTop: '8px', width: '100%' }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
                     );
                   })()}
                 </div>
               )}
 
               {/* SINK Action Dialog */}
-              {selectedAction === ActionType.SINK && (
+              {selectedAction === ActionType.SINK && (() => {
+                const power = getPowerStrategy(player.piratePower);
+                const isRelentless = power.id === 'THE_RELENTLESS';
+
+                // Calculate sloop move cost (Relentless gets first free)
+                const sloopMoveCost = isRelentless
+                  ? Math.max(0, sinkSloopMoves.length - 1)
+                  : sinkSloopMoves.length;
+
+                // Calculate total bribes needed
+                const additionalSinkCost = sinkAdditionalTargets.length;
+                const totalBribesNeeded = sloopMoveCost + additionalSinkCost;
+
+                // Find hexes with player's sloops for movement
+                const playerSloopHexes = Object.values(G.board.hexes).filter(hex =>
+                  hex.ships.some(s => s.playerId === effectivePlayerID && s.type === ShipType.SLOOP)
+                );
+
+                // Get adjacent hexes for sloop movement destination
+                const getAdjacentHexes = (coord: HexCoord): HexCoord[] => {
+                  const directions = [
+                    { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
+                    { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
+                  ];
+                  return directions
+                    .map(d => ({ q: coord.q + d.q, r: coord.r + d.r, s: -(coord.q + d.q) - (coord.r + d.r) }))
+                    .filter(c => G.board.hexes[hexToKey(c)] !== undefined);
+                };
+
+                return (
                 <div style={styles.actionDialog}>
                   <strong>SINK Action</strong>
-                  {!selectedHex ? (
-                    <p>Click a hex where you have ships AND opponent has ships</p>
-                  ) : (() => {
+                  <div style={styles.sailInfo}>
+                    Remove an opponent's ship. Gain notoriety if they're at least as notorious as you.
+                    {isRelentless && (
+                      <div style={{ marginTop: '4px', color: '#4CAF50' }}>
+                        ✨ The Relentless: First sloop move is FREE!
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step 1: Select hex */}
+                  {!selectedHex && !sinkSloopMoveSource && (
+                    <div style={styles.sailStep}>
+                      <div style={styles.stepNumber}>1</div>
+                      <p>Click a hex where you have ships AND an opponent has ships (highlighted in green)</p>
+                    </div>
+                  )}
+
+                  {/* Sloop movement mode */}
+                  {sinkSloopMoveSource && (
+                    <div style={styles.sailStep}>
+                      <div style={{ ...styles.stepNumber, backgroundColor: '#FFA500' }}>⛵</div>
+                      <p style={{ marginBottom: '10px' }}>
+                        Moving sloop from ({sinkSloopMoveSource.q}, {sinkSloopMoveSource.r})
+                      </p>
+                      <p style={{ fontSize: '13px', marginBottom: '10px' }}>Select destination (1 hex away):</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {getAdjacentHexes(sinkSloopMoveSource).map(dest => (
+                          <button
+                            key={hexToKey(dest)}
+                            onClick={() => {
+                              setSinkSloopMoves([...sinkSloopMoves, { from: sinkSloopMoveSource, to: dest }]);
+                              setSinkSloopMoveSource(null);
+                            }}
+                            style={{ ...styles.button, padding: '8px 12px', fontSize: '12px' }}
+                          >
+                            ({dest.q}, {dest.r})
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setSinkSloopMoveSource(null)}
+                        style={{ ...styles.button, marginTop: '10px', width: '100%' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Step 2: Configure sink */}
+                  {selectedHex && !sinkSloopMoveSource && (() => {
                     const hex = G.board.hexes[hexToKey(selectedHex)];
-                    const opponentShips = hex?.ships.filter(s => s.playerId !== effectivePlayerID) || [];
+                    const opponentShips = hex?.ships.filter(s => s.playerId !== effectivePlayerID && s.type !== ShipType.PORT) || [];
                     const targetPlayers = [...new Set(opponentShips.map(s => s.playerId))];
+                    const selectedTarget = sinkTargetPlayer || targetPlayers[0];
+                    const targetPlayer = G.players.find(p => p.id === selectedTarget);
                     const playerInfluence = getInfluence(G.board, selectedHex, effectivePlayerID);
+                    const targetInfluence = getInfluence(G.board, selectedHex, selectedTarget);
+                    const canSinkGalleon = playerInfluence >= targetInfluence;
+
+                    // Get target's ships for counting
+                    const targetShipsAtHex = hex?.ships.filter(s => s.playerId === selectedTarget) || [];
+                    const targetSloopCount = targetShipsAtHex.filter(s => s.type === ShipType.SLOOP).length;
+                    const targetGalleonCount = targetShipsAtHex.filter(s => s.type === ShipType.GALLEON).length;
+
+                    // Calculate how many of each we're already sinking
+                    const sinkingSloops = (sinkTargetShip === ShipType.SLOOP ? 1 : 0) +
+                      sinkAdditionalTargets.filter(t => t.playerId === selectedTarget && t.shipType === ShipType.SLOOP).length;
+                    const sinkingGalleons = (sinkTargetShip === ShipType.GALLEON ? 1 : 0) +
+                      sinkAdditionalTargets.filter(t => t.playerId === selectedTarget && t.shipType === ShipType.GALLEON).length;
+
+                    // Can add more sinks?
+                    const canAddSloop = targetSloopCount > sinkingSloops;
+                    const canAddGalleon = canSinkGalleon && targetGalleonCount > sinkingGalleons;
+
+                    // Calculate notoriety gain
+                    const willGainNotoriety = targetPlayer && targetPlayer.notoriety >= player.notoriety;
+                    const baseNotoriety = sinkTargetShip === ShipType.SLOOP ? 1 : 3;
+                    const additionalNotoriety = sinkAdditionalTargets.reduce((sum, t) => sum + (t.shipType === ShipType.SLOOP ? 1 : 3), 0);
+                    const totalNotoriety = willGainNotoriety ? baseNotoriety + additionalNotoriety : 0;
 
                     return (
-                      <>
-                        <p>Sinking at ({selectedHex.q}, {selectedHex.r})</p>
+                      <div style={styles.sailStep}>
+                        <div style={styles.stepNumber}>2</div>
+                        <p style={{ marginBottom: '10px' }}>
+                          Sinking at ({selectedHex.q}, {selectedHex.r})
+                        </p>
+
+                        {/* Influence comparison */}
+                        <div style={{ marginBottom: '12px', padding: '8px', backgroundColor: '#f0f0f0', borderRadius: '4px', fontSize: '13px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                            <span>Your influence: <strong>{playerInfluence}</strong></span>
+                            <span>
+                              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: getPlayerColorForUI(selectedTarget), marginRight: '4px' }}></span>
+                              Their influence: <strong>{targetInfluence}</strong>
+                            </span>
+                          </div>
+                          {!canSinkGalleon && (
+                            <div style={{ color: '#E24A4A', marginTop: '4px', fontSize: '12px' }}>
+                              ⚠️ Need equal or greater influence to sink Galleons
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Target player selection */}
                         {targetPlayers.length > 1 && (
-                          <div>
-                            <p>Select target player:</p>
-                            {targetPlayers.map(pid => (
-                              <button
-                                key={pid}
-                                onClick={() => setSinkTargetPlayer(pid)}
-                                style={{...styles.button, ...(sinkTargetPlayer === pid ? styles.buttonSelected : {})}}
-                              >
-                                Player {parseInt(pid) + 1}
-                              </button>
-                            ))}
+                          <div style={{ marginBottom: '12px' }}>
+                            <p style={{ fontSize: '13px', marginBottom: '6px' }}>Select target player:</p>
+                            <div style={styles.shipPicker}>
+                              {targetPlayers.map(pid => {
+                                const p = G.players.find(pl => pl.id === pid);
+                                return (
+                                  <button
+                                    key={pid}
+                                    onClick={() => {
+                                      setSinkTargetPlayer(pid);
+                                      setSinkAdditionalTargets([]);
+                                    }}
+                                    style={{
+                                      ...styles.shipButton,
+                                      borderColor: getPlayerColorForUI(pid),
+                                      backgroundColor: selectedTarget === pid ? getPlayerColorForUI(pid) : '#fff',
+                                      color: selectedTarget === pid ? '#fff' : getPlayerColorForUI(pid)
+                                    }}
+                                  >
+                                    {p?.name || `Player ${parseInt(pid) + 1}`}
+                                  </button>
+                                );
+                              })}
+                            </div>
                           </div>
                         )}
-                        <div>
-                          <p>Select ship to sink:</p>
-                          {(() => {
-                            const target = sinkTargetPlayer || targetPlayers[0];
-                            const targetShips = hex?.ships.filter(s => s.playerId === target) || [];
-                            const targetInfluence = getInfluence(G.board, selectedHex, target);
-                            const canSinkGalleon = playerInfluence >= targetInfluence;
-                            return (
-                              <div style={styles.buttonGrid}>
-                                {targetShips.some(s => s.type === ShipType.SLOOP) && (
-                                  <button
-                                    onClick={() => setSinkTargetShip(ShipType.SLOOP)}
-                                    style={{...styles.button, ...(sinkTargetShip === ShipType.SLOOP ? styles.buttonSelected : {})}}
-                                  >
-                                    Sloop (+1 notoriety)
-                                  </button>
-                                )}
-                                {targetShips.some(s => s.type === ShipType.GALLEON) && (
-                                  <button
-                                    onClick={() => setSinkTargetShip(ShipType.GALLEON)}
-                                    style={{...styles.button, ...(sinkTargetShip === ShipType.GALLEON ? styles.buttonSelected : {})}}
-                                    disabled={!canSinkGalleon}
-                                    title={!canSinkGalleon ? 'Need more influence' : ''}
-                                  >
-                                    Galleon (+3 notoriety) {!canSinkGalleon && '⚠️'}
-                                  </button>
-                                )}
-                              </div>
-                            );
-                          })()}
+
+                        {/* Primary ship to sink */}
+                        <div style={{ marginBottom: '12px' }}>
+                          <p style={{ fontSize: '13px', marginBottom: '6px' }}>Ship to sink:</p>
+                          <div style={styles.shipPicker}>
+                            {targetSloopCount > 0 && (
+                              <button
+                                onClick={() => setSinkTargetShip(ShipType.SLOOP)}
+                                style={{
+                                  ...styles.shipButton,
+                                  backgroundColor: sinkTargetShip === ShipType.SLOOP ? '#4A90E2' : '#fff',
+                                  color: sinkTargetShip === ShipType.SLOOP ? '#fff' : '#4A90E2'
+                                }}
+                              >
+                                ⛵ Sloop
+                              </button>
+                            )}
+                            {targetGalleonCount > 0 && (
+                              <button
+                                onClick={() => canSinkGalleon && setSinkTargetShip(ShipType.GALLEON)}
+                                disabled={!canSinkGalleon}
+                                style={{
+                                  ...styles.shipButton,
+                                  backgroundColor: sinkTargetShip === ShipType.GALLEON ? '#4A90E2' : '#fff',
+                                  color: sinkTargetShip === ShipType.GALLEON ? '#fff' : '#4A90E2',
+                                  opacity: canSinkGalleon ? 1 : 0.5
+                                }}
+                              >
+                                🚢 Galleon
+                              </button>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Bribe: Move sloops before sinking */}
+                        {playerSloopHexes.length > 0 && player.doubloons > totalBribesNeeded && (
+                          <div style={styles.bribeOption}>
+                            <div style={{ fontSize: '13px', marginBottom: '6px' }}>
+                              <strong>Bribe:</strong> Move sloops 1 hex before sinking
+                              {isRelentless && <span style={{ color: '#4CAF50' }}> (1st FREE!)</span>}
+                              {!isRelentless && <span> (1💰 each)</span>}
+                            </div>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                              {playerSloopHexes.map(sloopHex => (
+                                <button
+                                  key={hexToKey(sloopHex.coord)}
+                                  onClick={() => setSinkSloopMoveSource(sloopHex.coord)}
+                                  style={{ ...styles.button, padding: '6px 10px', fontSize: '12px' }}
+                                >
+                                  ⛵ ({sloopHex.coord.q}, {sloopHex.coord.r})
+                                </button>
+                              ))}
+                            </div>
+                            {sinkSloopMoves.length > 0 && (
+                              <div style={{ marginTop: '8px', padding: '6px', backgroundColor: '#fff', borderRadius: '4px' }}>
+                                <span style={{ fontSize: '12px', color: '#666' }}>Sloop moves: </span>
+                                {sinkSloopMoves.map((m, i) => (
+                                  <span key={i} style={{ fontSize: '11px', marginRight: '8px' }}>
+                                    ({m.from.q},{m.from.r})→({m.to.q},{m.to.r})
+                                    {isRelentless && i === 0 && <span style={{ color: '#4CAF50' }}> FREE</span>}
+                                  </span>
+                                ))}
+                                <button
+                                  onClick={() => setSinkSloopMoves([])}
+                                  style={{ ...styles.button, padding: '2px 8px', fontSize: '11px', marginLeft: '4px' }}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Bribe: Sink additional ships */}
+                        {(canAddSloop || canAddGalleon) && player.doubloons > totalBribesNeeded && (
+                          <div style={styles.bribeOption}>
+                            <div style={{ fontSize: '13px', marginBottom: '6px' }}>
+                              <strong>Bribe:</strong> Sink additional ships (1💰 each)
+                            </div>
+                            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                              {canAddSloop && (
+                                <button
+                                  onClick={() => setSinkAdditionalTargets([...sinkAdditionalTargets, { shipType: ShipType.SLOOP, playerId: selectedTarget }])}
+                                  style={{ ...styles.button, padding: '6px 12px', fontSize: '12px' }}
+                                >
+                                  + Sloop (1💰)
+                                </button>
+                              )}
+                              {canAddGalleon && (
+                                <button
+                                  onClick={() => setSinkAdditionalTargets([...sinkAdditionalTargets, { shipType: ShipType.GALLEON, playerId: selectedTarget }])}
+                                  style={{ ...styles.button, padding: '6px 12px', fontSize: '12px' }}
+                                >
+                                  + Galleon (1💰)
+                                </button>
+                              )}
+                            </div>
+                            {sinkAdditionalTargets.length > 0 && (
+                              <div style={{ marginTop: '8px' }}>
+                                <span style={{ fontSize: '12px', color: '#666' }}>Additional sinks: </span>
+                                {sinkAdditionalTargets.map((t, i) => (
+                                  <span key={i} style={{ marginRight: '8px', fontSize: '12px' }}>
+                                    {t.shipType === ShipType.SLOOP ? '⛵' : '🚢'}
+                                  </span>
+                                ))}
+                                <button
+                                  onClick={() => setSinkAdditionalTargets([])}
+                                  style={{ ...styles.button, padding: '2px 8px', fontSize: '11px', marginLeft: '8px' }}
+                                >
+                                  Clear
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Summary */}
+                        <div style={{ marginTop: '12px', padding: '10px', backgroundColor: '#e8f8e8', borderRadius: '6px', border: '1px solid #4CAF50' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                            <span>
+                              Sinking: {sinkTargetShip === ShipType.SLOOP ? '⛵' : '🚢'}
+                              {sinkAdditionalTargets.map((t, i) => (
+                                <span key={i}> + {t.shipType === ShipType.SLOOP ? '⛵' : '🚢'}</span>
+                              ))}
+                            </span>
+                            <span>Cost: {totalBribesNeeded}💰</span>
+                          </div>
+                          {sinkSloopMoves.length > 0 && (
+                            <div style={{ fontSize: '12px', color: '#666', marginTop: '2px' }}>
+                              Pre-moves: {sinkSloopMoves.length} sloop{sinkSloopMoves.length !== 1 ? 's' : ''}
+                              {isRelentless && sinkSloopMoves.length >= 1 && ' (1 free)'}
+                            </div>
+                          )}
+                          <div style={{ marginTop: '4px', fontSize: '13px', color: willGainNotoriety ? '#4CAF50' : '#999' }}>
+                            {willGainNotoriety
+                              ? `+${totalNotoriety} notoriety`
+                              : 'No notoriety (target has less than you)'}
+                          </div>
+                        </div>
+
                         <button
                           onClick={() => {
-                            const target = sinkTargetPlayer || targetPlayers[0];
                             moves.sink({
                               hex: selectedHex,
                               targetShipType: sinkTargetShip,
-                              targetPlayerId: target,
-                              bribesUsed: 0
+                              targetPlayerId: selectedTarget,
+                              sloopMovesBefore: sinkSloopMoves,
+                              additionalSinks: sinkAdditionalTargets
                             });
                             resetActionState();
                           }}
                           style={styles.executeButton}
-                          disabled={targetPlayers.length === 0}
+                          disabled={targetPlayers.length === 0 || totalBribesNeeded > player.doubloons}
                         >
-                          Sink {sinkTargetShip}
+                          Sink {1 + sinkAdditionalTargets.length} Ship{sinkAdditionalTargets.length > 0 ? 's' : ''} {totalBribesNeeded > 0 ? `(${totalBribesNeeded}💰)` : ''}
                         </button>
-                      </>
+
+                        <button
+                          onClick={() => {
+                            setSelectedHex(null);
+                            setSinkAdditionalTargets([]);
+                            setSinkSloopMoves([]);
+                          }}
+                          style={{ ...styles.button, marginTop: '8px', width: '100%' }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
                     );
                   })()}
                 </div>
-              )}
+                );
+              })()}
 
               {/* SAIL Action Dialog */}
-              {selectedAction === ActionType.SAIL && (
+              {selectedAction === ActionType.SAIL && (() => {
+                const power = getPowerStrategy(player.piratePower);
+                const baseMovementPoints = power.getSailMaxDistance(); // 2 normally, 3 for Sailor
+                const totalMovementPoints = baseMovementPoints + sailState.bribeCount;
+
+                // Calculate movement points used by planned moves
+                const usedMovementPoints = sailState.plannedMoves.reduce((sum, move) => {
+                  return sum + hexDistance(move.from, move.to);
+                }, 0);
+
+                const remainingPoints = totalMovementPoints - usedMovementPoints;
+
+                return (
                 <div style={styles.actionDialog}>
                   <strong>SAIL Action</strong>
-                  {sailMoves.length === 0 && !sailSourceHex ? (
-                    <p>Click a hex with your ships to select source</p>
-                  ) : sailSourceHex && sailMoves.length === 0 ? (
-                    <>
-                      <p>Source: ({sailSourceHex.q}, {sailSourceHex.r})</p>
-                      <p>Click destination hex (up to 2 hexes away)</p>
-                      <button onClick={() => setSailSourceHex(null)} style={styles.button}>
-                        Cancel
+                  <div style={styles.sailInfo}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Movement Points:</span>
+                      <span><strong>{usedMovementPoints}</strong> / {totalMovementPoints} used</span>
+                    </div>
+                    {remainingPoints > 0 && (
+                      <div style={{ fontSize: '11px', color: '#4CAF50', marginTop: '4px' }}>
+                        {remainingPoints} point{remainingPoints !== 1 ? 's' : ''} remaining
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Step 1: No source selected - prompt to click a hex */}
+                  {!sailState.sourceHex && sailState.plannedMoves.length === 0 && (
+                    <div style={styles.sailStep}>
+                      <div style={styles.stepNumber}>1</div>
+                      <p>Click a hex with your ships (highlighted in orange)</p>
+                    </div>
+                  )}
+
+                  {/* Step 2: Source selected but need to pick which ship */}
+                  {sailState.sourceHex && !sailState.selectedShip && (() => {
+                    const shipsAtSource = getPlayerShips(G.board, sailState.sourceHex, effectivePlayerID)
+                      .filter(s => s.type !== ShipType.PORT);
+                    return (
+                      <div style={styles.sailStep}>
+                        <div style={styles.stepNumber}>2</div>
+                        <p>Select which ship to move from ({sailState.sourceHex.q}, {sailState.sourceHex.r}):</p>
+                        <div style={styles.shipPicker}>
+                          {shipsAtSource.map((ship, i) => (
+                            <button
+                              key={i}
+                              onClick={() => setSailState({ ...sailState, selectedShip: ship })}
+                              style={styles.shipButton}
+                            >
+                              {ship.type === ShipType.SLOOP ? '⛵ Sloop' : '🚢 Galleon'}
+                            </button>
+                          ))}
+                        </div>
+                        <button
+                          onClick={() => setSailState({ ...sailState, sourceHex: null })}
+                          style={{ ...styles.button, marginTop: '8px' }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Step 3: Ship selected - show destination prompt */}
+                  {sailState.sourceHex && sailState.selectedShip && (
+                    <div style={styles.sailStep}>
+                      <div style={styles.stepNumber}>3</div>
+                      <p>
+                        Moving {sailState.selectedShip.type === ShipType.SLOOP ? '⛵ Sloop' : '🚢 Galleon'}
+                        from ({sailState.sourceHex.q}, {sailState.sourceHex.r})
+                      </p>
+                      <p>Click a destination (highlighted in green)</p>
+                      <button
+                        onClick={() => setSailState({ ...sailState, selectedShip: null })}
+                        style={{ ...styles.button, marginTop: '8px' }}
+                      >
+                        ← Back
                       </button>
-                    </>
-                  ) : (
-                    <>
-                      <p>Moves planned: {sailMoves.length}</p>
-                      {sailMoves.map((m, i) => (
-                        <div key={i} style={styles.info}>
-                          {m.shipType}: ({m.from.q},{m.from.r}) → ({m.to.q},{m.to.r})
+                    </div>
+                  )}
+
+                  {/* Planned moves display */}
+                  {sailState.plannedMoves.length > 0 && (
+                    <div style={styles.plannedMoves}>
+                      <strong>Planned Moves:</strong>
+                      {sailState.plannedMoves.map((m, i) => (
+                        <div key={i} style={styles.plannedMove}>
+                          {m.shipType === ShipType.SLOOP ? '⛵' : '🚢'}
+                          ({m.from.q},{m.from.r}) → ({m.to.q},{m.to.r})
                         </div>
                       ))}
-                      <button
-                        onClick={() => {
-                          moves.sail({ moves: sailMoves, bribesUsed: 0 });
-                          resetActionState();
-                        }}
-                        style={styles.executeButton}
-                      >
-                        Execute Sail
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSailMoves([]);
-                          setSailSourceHex(null);
-                        }}
-                        style={styles.button}
-                      >
-                        Reset
-                      </button>
-                    </>
+
+                      {/* Bribe option for extra movement points */}
+                      {player.doubloons > 0 && (
+                        <div style={styles.bribeOption}>
+                          <div style={{ fontSize: '13px', marginBottom: '6px' }}>
+                            <strong>Bribes:</strong> +1 movement point per doubloon
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <button
+                              onClick={() => setSailState({ ...sailState, bribeCount: Math.max(0, sailState.bribeCount - 1) })}
+                              disabled={sailState.bribeCount === 0}
+                              style={{ ...styles.button, padding: '5px 12px', opacity: sailState.bribeCount === 0 ? 0.5 : 1 }}
+                            >
+                              −
+                            </button>
+                            <span style={{ minWidth: '80px', textAlign: 'center' }}>
+                              {sailState.bribeCount} bribe{sailState.bribeCount !== 1 ? 's' : ''} ({sailState.bribeCount}💰)
+                            </span>
+                            <button
+                              onClick={() => setSailState({ ...sailState, bribeCount: Math.min(player.doubloons, sailState.bribeCount + 1) })}
+                              disabled={sailState.bribeCount >= player.doubloons}
+                              style={{ ...styles.button, padding: '5px 12px', opacity: sailState.bribeCount >= player.doubloons ? 0.5 : 1 }}
+                            >
+                              +
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      <div style={styles.sailActions}>
+                        <button
+                          onClick={() => {
+                            moves.sail({ moves: sailState.plannedMoves, bribesUsed: sailState.bribeCount });
+                            resetActionState();
+                          }}
+                          style={styles.executeButton}
+                        >
+                          Execute Sail {sailState.bribeCount > 0 ? `(${sailState.bribeCount} doubloon${sailState.bribeCount !== 1 ? 's' : ''})` : ''}
+                        </button>
+                        <button
+                          onClick={() => setSailState({ sourceHex: null, selectedShip: null, plannedMoves: [], bribeCount: 0 })}
+                          style={{ ...styles.button, marginTop: '8px' }}
+                        >
+                          Reset All
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Prompt to add another move or click hex for next move */}
+                  {sailState.plannedMoves.length > 0 && !sailState.sourceHex && remainingPoints > 0 && (
+                    <div style={{ ...styles.sailStep, marginTop: '15px' }}>
+                      <p style={{ margin: 0, fontSize: '14px', color: '#666' }}>
+                        You have {remainingPoints} movement point{remainingPoints !== 1 ? 's' : ''} left.
+                        Click another hex with ships to add more moves.
+                      </p>
+                    </div>
                   )}
                 </div>
-              )}
+                );
+              })()}
 
               {/* Cancel button */}
               {selectedAction && (
@@ -964,5 +1407,73 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     gap: '5px'
+  },
+  // SAIL action styles
+  sailInfo: {
+    fontSize: '12px',
+    color: '#666',
+    marginBottom: '10px',
+    padding: '5px',
+    backgroundColor: '#e8f4f8',
+    borderRadius: '4px'
+  },
+  sailStep: {
+    padding: '12px',
+    marginTop: '10px',
+    backgroundColor: '#fff',
+    borderRadius: '6px',
+    border: '1px solid #ddd',
+    position: 'relative' as const
+  },
+  stepNumber: {
+    position: 'absolute' as const,
+    top: '-10px',
+    left: '10px',
+    backgroundColor: '#4A90E2',
+    color: '#fff',
+    width: '24px',
+    height: '24px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '14px',
+    fontWeight: 'bold'
+  },
+  shipPicker: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '10px'
+  },
+  shipButton: {
+    padding: '12px 20px',
+    fontSize: '16px',
+    border: '2px solid #4A90E2',
+    backgroundColor: '#fff',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    transition: 'all 0.2s',
+    flex: 1
+  },
+  plannedMoves: {
+    marginTop: '15px',
+    padding: '12px',
+    backgroundColor: '#e8f8e8',
+    borderRadius: '6px',
+    border: '2px solid #4CAF50'
+  },
+  plannedMove: {
+    padding: '6px 0',
+    fontSize: '14px',
+    borderBottom: '1px solid #c8e8c8'
+  },
+  bribeOption: {
+    marginTop: '10px',
+    padding: '8px',
+    backgroundColor: '#fff',
+    borderRadius: '4px'
+  },
+  sailActions: {
+    marginTop: '10px'
   }
 };

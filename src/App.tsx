@@ -3,12 +3,23 @@ import { Client } from 'boardgame.io/react';
 import { NotoriousGame } from './game/NotoriousGame';
 import { Board } from './components/Board';
 import { GameUI } from './components/GameUI';
-import { ActionType } from './types/GameTypes';
+import { ActionType, ShipType } from './types/GameTypes';
 import { HexCoord } from './types/CoordinateTypes';
+import { Ship } from './game/types/GameState';
 import { enumerateMoves } from './game/ai/NotoriousBot';
 
 // AI Player IDs - Players 1, 2, 3 are AI controlled (player 0 is human)
 const AI_PLAYER_IDS = ['1', '2', '3'];
+
+/**
+ * Sail action state - tracks the multi-step SAIL flow
+ */
+export interface SailState {
+  sourceHex: HexCoord | null;
+  selectedShip: Ship | null;
+  plannedMoves: Array<{ shipType: ShipType; from: HexCoord; to: HexCoord }>;
+  bribeCount: number;
+}
 
 /**
  * Main game board component that combines the hex board and UI
@@ -17,6 +28,14 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   // Shared state for action execution
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
+
+  // SAIL action state - lifted up for Board/GameUI coordination
+  const [sailState, setSailState] = useState<SailState>({
+    sourceHex: null,
+    selectedShip: null,
+    plannedMoves: [],
+    bribeCount: 0
+  });
 
   // Track last AI move to prevent infinite retries
   const [lastAIMove, setLastAIMove] = useState<{ player: string; turn: number } | null>(null);
@@ -82,7 +101,15 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   const resetActionState = () => {
     setSelectedAction(null);
     setSelectedHex(null);
+    setSailState({ sourceHex: null, selectedShip: null, plannedMoves: [], bribeCount: 0 });
   };
+
+  // Reset sail state when action changes
+  useEffect(() => {
+    if (selectedAction !== ActionType.SAIL) {
+      setSailState({ sourceHex: null, selectedShip: null, plannedMoves: [], bribeCount: 0 });
+    }
+  }, [selectedAction]);
 
   return (
     <div style={styles.container}>
@@ -95,6 +122,7 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           selectedAction={selectedAction}
           selectedHex={selectedHex}
           onHexClick={handleHexClick}
+          sailState={sailState}
         />
       </div>
       <div style={styles.uiContainer}>
@@ -108,6 +136,8 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           selectedHex={selectedHex}
           setSelectedHex={setSelectedHex}
           resetActionState={resetActionState}
+          sailState={sailState}
+          setSailState={setSailState}
         />
       </div>
     </div>

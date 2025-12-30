@@ -1,10 +1,12 @@
 import React from 'react';
-import { NotoriousState, hexToKey } from '../game/types/GameState';
+import { NotoriousState, hexToKey, Ship } from '../game/types/GameState';
 import { HexCoord, hexEquals } from '../types/CoordinateTypes';
 import { hexToPixel, getHexCorners, hexDistance } from '../utils/HexMath';
-import { getHexController, getPlayerShips, canSailBetween } from '../game/logic/BoardLogic';
+import { getHexController, getPlayerShips, canSailBetween, getNeighbors, getHex } from '../game/logic/BoardLogic';
 import { ShipRenderer } from './ShipRenderer';
 import { ActionType, ShipType } from '../types/GameTypes';
+import { getPowerStrategy } from '../core/powers';
+import { SailState } from '../App';
 
 interface BoardProps {
   G: NotoriousState;
@@ -14,6 +16,7 @@ interface BoardProps {
   selectedAction: ActionType | null;
   selectedHex: HexCoord | null;
   onHexClick: (coord: HexCoord) => void;
+  sailState: SailState;
 }
 
 /**
@@ -74,6 +77,53 @@ function isValidHexForSetup(
 }
 
 /**
+ * Get all valid sail destinations for a ship at a given hex
+ * Takes into account the player's power and remaining movement points
+ */
+function getValidSailDestinations(
+  G: NotoriousState,
+  sourceHex: HexCoord,
+  playerID: string,
+  remainingMovementPoints: number
+): Set<string> {
+  const validDestinations = new Set<string>();
+  const player = G.players.find(p => p.id === playerID);
+  if (!player || remainingMovementPoints <= 0) return validDestinations;
+
+  const power = getPowerStrategy(player.piratePower);
+
+  // Helper to check if sailing is valid between two hexes for this player
+  const canSailForPlayer = (from: HexCoord, to: HexCoord): boolean => {
+    return power.canSailBetween(G.board, from, to, () => canSailBetween(G.board, from, to));
+  };
+
+  // BFS to find all reachable hexes within remaining movement points
+  const visited = new Set<string>();
+  const queue: Array<{ coord: HexCoord; distance: number }> = [{ coord: sourceHex, distance: 0 }];
+  visited.add(hexToKey(sourceHex));
+
+  while (queue.length > 0) {
+    const { coord, distance } = queue.shift()!;
+
+    if (distance >= remainingMovementPoints) continue;
+
+    const neighbors = getNeighbors(G.board, coord);
+    for (const neighbor of neighbors) {
+      const key = hexToKey(neighbor.coord);
+      if (visited.has(key)) continue;
+
+      if (canSailForPlayer(coord, neighbor.coord)) {
+        visited.add(key);
+        validDestinations.add(key);
+        queue.push({ coord: neighbor.coord, distance: distance + 1 });
+      }
+    }
+  }
+
+  return validDestinations;
+}
+
+/**
  * Check if a hex is a valid target for the current action
  */
 function isValidHexForAction(
@@ -81,59 +131,77 @@ function isValidHexForAction(
   coord: HexCoord,
   action: ActionType | null,
   playerID: string,
-  selectedHex: HexCoord | null,
+  sailState: SailState,
   ctx: any
-): boolean {
-  if (!action || ctx?.phase !== 'play') return false;
+): { isValid: boolean; isSource: boolean; isDestination: boolean } {
+  const result = { isValid: false, isSource: false, isDestination: false };
+  if (!action || ctx?.phase !== 'play') return result;
 
   const playerShips = getPlayerShips(G.board, coord, playerID);
   const player = G.players.find(p => p.id === playerID);
 
   switch (action) {
     case ActionType.BUILD: {
-      // Valid if player has ships there OR it's their port
       const hasShips = playerShips.length > 0;
       const isPort = player?.portLocation && hexEquals(player.portLocation, coord);
-      // Also check no enemy ships (unless it's port)
       const hex = G.board.hexes[hexToKey(coord)];
       const hasEnemyShips = hex?.ships.some(s => s.playerId !== playerID) ?? false;
-      return (hasShips || isPort) && (!hasEnemyShips || isPort);
+      result.isValid = (hasShips || isPort) && (!hasEnemyShips || isPort);
+      return result;
     }
 
     case ActionType.STEAL: {
-      // Valid if player has ships there AND opponent has sloop there
-      if (playerShips.length === 0) return false;
+      if (playerShips.length === 0) return result;
       const hex = G.board.hexes[hexToKey(coord)];
-      return hex?.ships.some(s => s.playerId !== playerID && s.type === ShipType.SLOOP) ?? false;
+      result.isValid = hex?.ships.some(s => s.playerId !== playerID && s.type === ShipType.SLOOP) ?? false;
+      return result;
     }
 
     case ActionType.SINK: {
-      // Valid if player has ships there AND opponent has any ship there
-      if (playerShips.length === 0) return false;
+      if (playerShips.length === 0) return result;
       const hex = G.board.hexes[hexToKey(coord)];
-      return hex?.ships.some(s => s.playerId !== playerID) ?? false;
+      result.isValid = hex?.ships.some(s => s.playerId !== playerID) ?? false;
+      return result;
     }
 
     case ActionType.SAIL: {
-      // If no hex selected, valid if player has ships there
-      if (!selectedHex) {
-        return playerShips.length > 0;
+      // Step 1: No ship selected - highlight hexes with player's ships (sources)
+      if (!sailState.selectedShip) {
+        const hasMovableShips = playerShips.filter(s => s.type !== ShipType.PORT).length > 0;
+        if (hasMovableShips) {
+          result.isValid = true;
+          result.isSource = true;
+        }
+        return result;
       }
-      // If hex selected, valid if it's reachable (within 2 hexes and path is valid)
-      const distance = hexDistance(selectedHex, coord);
-      if (distance === 0) return false;
-      if (distance > 2) return false;
-      if (distance === 1) return canSailBetween(G.board, selectedHex, coord);
-      // For distance 2, we'd need to check intermediate paths
-      return distance <= 2;
+
+      // Step 2: Ship selected - highlight valid destinations based on remaining movement points
+      if (sailState.sourceHex && player) {
+        const power = getPowerStrategy(player.piratePower);
+        const baseMovementPoints = power.getSailMaxDistance();
+        const totalMovementPoints = baseMovementPoints + sailState.bribeCount;
+
+        // Calculate movement points already used
+        const usedMovementPoints = sailState.plannedMoves.reduce((sum, move) => {
+          return sum + hexDistance(move.from, move.to);
+        }, 0);
+
+        const remainingPoints = totalMovementPoints - usedMovementPoints;
+
+        const validDestinations = getValidSailDestinations(G, sailState.sourceHex, playerID, remainingPoints);
+        if (validDestinations.has(hexToKey(coord))) {
+          result.isValid = true;
+          result.isDestination = true;
+        }
+      }
+      return result;
     }
 
     case ActionType.CHART:
-      // CHART doesn't need hex selection
-      return false;
+      return result;
 
     default:
-      return false;
+      return result;
   }
 }
 
@@ -141,7 +209,7 @@ function isValidHexForAction(
  * Main Board component - renders the hex grid with SVG
  */
 export const Board: React.FC<BoardProps> = ({
-  G, ctx, moves, playerID, selectedAction, selectedHex, onHexClick
+  G, ctx, moves, playerID, selectedAction, selectedHex, onHexClick, sailState
 }) => {
   // Default to player 0 (human player) if playerID not provided
   const effectivePlayerID = playerID ?? '0';
@@ -180,13 +248,14 @@ export const Board: React.FC<BoardProps> = ({
           : '#e0e0e0';
 
         const isSelected = selectedHex && hexEquals(selectedHex, hex.coord);
+        const isSourceHex = sailState.sourceHex && hexEquals(sailState.sourceHex, hex.coord);
 
         // Check if this hex is a valid target for current action or setup
-        let isValidTarget = false;
+        let actionResult = { isValid: false, isSource: false, isDestination: false };
         if (ctx.phase === 'setup' && ctx.currentPlayer === effectivePlayerID) {
-          isValidTarget = isValidHexForSetup(G, hex.coord, effectivePlayerID);
+          actionResult.isValid = isValidHexForSetup(G, hex.coord, effectivePlayerID);
         } else if (ctx.phase === 'play' && ctx.currentPlayer === effectivePlayerID && selectedAction) {
-          isValidTarget = isValidHexForAction(G, hex.coord, selectedAction, effectivePlayerID, selectedHex, ctx);
+          actionResult = isValidHexForAction(G, hex.coord, selectedAction, effectivePlayerID, sailState, ctx);
         }
 
         // Determine visual styling
@@ -195,10 +264,27 @@ export const Board: React.FC<BoardProps> = ({
         let strokeWidth = 2;
         let opacity = 0.6;
 
-        if (isSelected) {
+        if (isSourceHex) {
+          // Currently selected source hex for sailing
+          strokeColor = '#FFD700';  // Gold
+          strokeWidth = 4;
+          opacity = 1;
+        } else if (isSelected) {
           strokeColor = '#FFD700';
           strokeWidth = 3;
-        } else if (isValidTarget) {
+        } else if (actionResult.isDestination) {
+          // Valid destination for sailing
+          strokeColor = '#00FF00';  // Green
+          strokeWidth = 3;
+          opacity = 0.9;
+          fillColor = '#2E7D32';  // Darker green tint
+        } else if (actionResult.isSource) {
+          // Source hex (has movable ships)
+          strokeColor = '#FFA500';  // Orange
+          strokeWidth = 2;
+          opacity = 0.85;
+        } else if (actionResult.isValid) {
+          // Valid for other actions
           strokeColor = '#00FF00';
           strokeWidth = 3;
           opacity = 0.8;
