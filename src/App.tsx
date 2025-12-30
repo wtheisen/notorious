@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Client } from 'boardgame.io/react';
 import { NotoriousGame } from './game/NotoriousGame';
 import { Board } from './components/Board';
@@ -7,6 +7,15 @@ import { ActionType, ShipType } from './types/GameTypes';
 import { HexCoord } from './types/CoordinateTypes';
 import { Ship } from './game/types/GameState';
 import { enumerateMoves } from './game/ai/NotoriousBot';
+
+/**
+ * Target selection for STEAL/SINK actions
+ */
+export interface TargetSelection {
+  hex: HexCoord;
+  playerId: string;
+  shipType: ShipType;
+}
 
 // AI Player IDs - Players 1, 2, 3 are AI controlled (player 0 is human)
 const AI_PLAYER_IDS = ['1', '2', '3'];
@@ -36,6 +45,9 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
     plannedMoves: [],
     bribeCount: 0
   });
+
+  // Target selection for STEAL/SINK - when clicking enemy ships on board
+  const [targetSelection, setTargetSelection] = useState<TargetSelection | null>(null);
 
   // Track last AI move to prevent infinite retries
   const [lastAIMove, setLastAIMove] = useState<{ player: string; turn: number } | null>(null);
@@ -102,13 +114,15 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
     setSelectedAction(null);
     setSelectedHex(null);
     setSailState({ sourceHex: null, selectedShip: null, plannedMoves: [], bribeCount: 0 });
+    setTargetSelection(null);
   };
 
-  // Reset sail state when action changes
+  // Reset state when action changes
   useEffect(() => {
     if (selectedAction !== ActionType.SAIL) {
       setSailState({ sourceHex: null, selectedShip: null, plannedMoves: [], bribeCount: 0 });
     }
+    setTargetSelection(null);
   }, [selectedAction]);
 
   return (
@@ -123,6 +137,9 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           selectedHex={selectedHex}
           onHexClick={handleHexClick}
           sailState={sailState}
+          setSailState={setSailState}
+          targetSelection={targetSelection}
+          setTargetSelection={setTargetSelection}
         />
       </div>
       <div style={styles.uiContainer}>
@@ -138,6 +155,8 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           resetActionState={resetActionState}
           sailState={sailState}
           setSailState={setSailState}
+          targetSelection={targetSelection}
+          setTargetSelection={setTargetSelection}
         />
       </div>
     </div>

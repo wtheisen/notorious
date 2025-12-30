@@ -5,6 +5,9 @@ import { ShipType, PlayerColor } from '../types/GameTypes';
 interface ShipRendererProps {
   ship: Ship;
   position: { x: number; y: number };
+  isClickable?: boolean;
+  isSelected?: boolean;
+  onClick?: (e: React.MouseEvent) => void;
 }
 
 /**
@@ -27,8 +30,25 @@ function getPlayerColorHex(playerId: string): string {
  * - Galleon: Large circle
  * - Sloop: Triangle
  */
-export const ShipRenderer: React.FC<ShipRendererProps> = ({ ship, position }) => {
+export const ShipRenderer: React.FC<ShipRendererProps> = ({
+  ship,
+  position,
+  isClickable = false,
+  isSelected = false,
+  onClick
+}) => {
   const color = getPlayerColorHex(ship.playerId);
+  const strokeColor = isSelected ? '#FFD700' : '#000';
+  const strokeWidth = isSelected ? 3 : 2;
+
+  // Common props for interactive elements
+  const interactiveProps = {
+    onClick,
+    style: {
+      cursor: isClickable ? 'pointer' : 'default',
+      filter: isClickable ? 'drop-shadow(0 0 3px rgba(255, 215, 0, 0.8))' : undefined
+    } as React.CSSProperties
+  };
 
   if (ship.type === ShipType.PORT) {
     return (
@@ -38,8 +58,8 @@ export const ShipRenderer: React.FC<ShipRendererProps> = ({ ship, position }) =>
         width={20}
         height={20}
         fill={color}
-        stroke="#000"
-        strokeWidth="2"
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
       />
     );
   }
@@ -49,22 +69,25 @@ export const ShipRenderer: React.FC<ShipRendererProps> = ({ ship, position }) =>
       <circle
         cx={position.x}
         cy={position.y}
-        r={8}
+        r={isClickable ? 10 : 8}
         fill={color}
-        stroke="#000"
-        strokeWidth="2"
+        stroke={strokeColor}
+        strokeWidth={strokeWidth}
+        {...interactiveProps}
       />
     );
   }
 
   // Sloop - triangle pointing up
-  const points = `${position.x},${position.y - 6} ${position.x - 5},${position.y + 6} ${position.x + 5},${position.y + 6}`;
+  const size = isClickable ? 8 : 6;
+  const points = `${position.x},${position.y - size} ${position.x - size},${position.y + size} ${position.x + size},${position.y + size}`;
   return (
     <polygon
       points={points}
       fill={color}
-      stroke="#000"
-      strokeWidth="2"
+      stroke={strokeColor}
+      strokeWidth={strokeWidth}
+      {...interactiveProps}
     />
   );
 };

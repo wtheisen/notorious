@@ -6,7 +6,7 @@ import { getHexController, getPlayerShips, canSailBetween, getNeighbors, getHex 
 import { ShipRenderer } from './ShipRenderer';
 import { ActionType, ShipType } from '../types/GameTypes';
 import { getPowerStrategy } from '../core/powers';
-import { SailState } from '../App';
+import { SailState, TargetSelection } from '../App';
 
 interface BoardProps {
   G: NotoriousState;
@@ -17,6 +17,9 @@ interface BoardProps {
   selectedHex: HexCoord | null;
   onHexClick: (coord: HexCoord) => void;
   sailState: SailState;
+  setSailState: (state: SailState) => void;
+  targetSelection: TargetSelection | null;
+  setTargetSelection: (target: TargetSelection | null) => void;
 }
 
 /**
@@ -209,7 +212,8 @@ function isValidHexForAction(
  * Main Board component - renders the hex grid with SVG
  */
 export const Board: React.FC<BoardProps> = ({
-  G, ctx, moves, playerID, selectedAction, selectedHex, onHexClick, sailState
+  G, ctx, moves, playerID, selectedAction, selectedHex, onHexClick, sailState, setSailState,
+  targetSelection, setTargetSelection
 }) => {
   // Default to player 0 (human player) if playerID not provided
   const effectivePlayerID = playerID ?? '0';
@@ -222,6 +226,91 @@ export const Board: React.FC<BoardProps> = ({
   const handleHexClick = (coord: HexCoord) => {
     onHexClick(coord);
     console.log('Hex clicked:', coord, 'Action:', selectedAction);
+  };
+
+  // Handle clicking on a ship
+  const handleShipClick = (ship: Ship, coord: HexCoord, e: React.MouseEvent) => {
+    e.stopPropagation(); // Don't trigger hex click
+
+    // Only handle during play phase when it's the player's turn
+    if (ctx.phase !== 'play' || ctx.currentPlayer !== effectivePlayerID) return;
+
+    // SAIL action - select player's own ship to move
+    if (selectedAction === ActionType.SAIL && ship.playerId === effectivePlayerID && ship.type !== ShipType.PORT) {
+      if (!sailState.selectedShip) {
+        setSailState({
+          ...sailState,
+          sourceHex: coord,
+          selectedShip: ship
+        });
+        console.log('Ship selected for sailing:', ship, 'at', coord);
+      }
+      return;
+    }
+
+    // STEAL action - select opponent's sloop
+    if (selectedAction === ActionType.STEAL && ship.playerId !== effectivePlayerID && ship.type === ShipType.SLOOP) {
+      // Check player has ships at this hex
+      const playerShipsHere = getPlayerShips(G.board, coord, effectivePlayerID);
+      if (playerShipsHere.length > 0) {
+        setTargetSelection({
+          hex: coord,
+          playerId: ship.playerId,
+          shipType: ShipType.SLOOP
+        });
+        onHexClick(coord); // Also set selectedHex for the UI
+        console.log('Sloop selected for stealing:', ship, 'at', coord);
+      }
+      return;
+    }
+
+    // SINK action - select opponent's ship
+    if (selectedAction === ActionType.SINK && ship.playerId !== effectivePlayerID && ship.type !== ShipType.PORT) {
+      // Check player has ships at this hex
+      const playerShipsHere = getPlayerShips(G.board, coord, effectivePlayerID);
+      if (playerShipsHere.length > 0) {
+        setTargetSelection({
+          hex: coord,
+          playerId: ship.playerId,
+          shipType: ship.type
+        });
+        onHexClick(coord); // Also set selectedHex for the UI
+        console.log('Ship selected for sinking:', ship, 'at', coord);
+      }
+      return;
+    }
+  };
+
+  // Check if a ship is clickable
+  const isShipClickable = (ship: Ship, coord: HexCoord): boolean => {
+    if (ctx.phase !== 'play' || ctx.currentPlayer !== effectivePlayerID) return false;
+
+    // SAIL - player's own ships (not ports) are clickable when no ship selected yet
+    if (selectedAction === ActionType.SAIL && ship.playerId === effectivePlayerID && ship.type !== ShipType.PORT) {
+      return !sailState.selectedShip;
+    }
+
+    // STEAL - opponent's sloops are clickable if player has ships at that hex
+    if (selectedAction === ActionType.STEAL && ship.playerId !== effectivePlayerID && ship.type === ShipType.SLOOP) {
+      const playerShipsHere = getPlayerShips(G.board, coord, effectivePlayerID);
+      return playerShipsHere.length > 0;
+    }
+
+    // SINK - opponent's ships (not ports) are clickable if player has ships at that hex
+    if (selectedAction === ActionType.SINK && ship.playerId !== effectivePlayerID && ship.type !== ShipType.PORT) {
+      const playerShipsHere = getPlayerShips(G.board, coord, effectivePlayerID);
+      return playerShipsHere.length > 0;
+    }
+
+    return false;
+  };
+
+  // Check if a ship is selected as a target
+  const isShipTargeted = (ship: Ship, coord: HexCoord): boolean => {
+    if (!targetSelection) return false;
+    return hexEquals(targetSelection.hex, coord) &&
+           targetSelection.playerId === ship.playerId &&
+           targetSelection.shipType === ship.type;
   };
 
   return (
@@ -348,11 +437,25 @@ export const Board: React.FC<BoardProps> = ({
             {/* Ships */}
             {hex.ships.map((ship, index) => {
               const shipPos = calculateShipPosition(pixel, index, hex.ships.length);
+              const clickable = isShipClickable(ship, hex.coord);
+
+              // Check if this ship is selected (for sailing) or targeted (for steal/sink)
+              const isSailSelected = sailState.selectedShip &&
+                sailState.sourceHex &&
+                hexEquals(sailState.sourceHex, hex.coord) &&
+                sailState.selectedShip.type === ship.type &&
+                sailState.selectedShip.playerId === ship.playerId;
+              const isTargeted = isShipTargeted(ship, hex.coord);
+              const isSelected = isSailSelected || isTargeted;
+
               return (
                 <ShipRenderer
                   key={`${ship.playerId}-${ship.type}-${index}`}
                   ship={ship}
                   position={shipPos}
+                  isClickable={clickable}
+                  isSelected={isSelected}
+                  onClick={clickable ? (e) => handleShipClick(ship, hex.coord, e) : undefined}
                 />
               );
             })}

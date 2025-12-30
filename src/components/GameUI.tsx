@@ -6,7 +6,7 @@ import { getPlayerShips, getInfluence, getHexController, getIslandByName, findPa
 import { hexDistance } from '../utils/HexMath';
 import { getPowerStrategy } from '../core/powers';
 import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../core/Chart';
-import { SailState } from '../App';
+import { SailState, TargetSelection } from '../App';
 
 /**
  * Get player color for UI elements
@@ -33,6 +33,8 @@ interface GameUIProps {
   resetActionState: () => void;
   sailState: SailState;
   setSailState: (state: SailState) => void;
+  targetSelection: TargetSelection | null;
+  setTargetSelection: (target: TargetSelection | null) => void;
 }
 
 /**
@@ -140,7 +142,7 @@ function getChartDescription(chart: AnyChart): string {
 export const GameUI: React.FC<GameUIProps> = ({
   G, ctx, moves, playerID,
   selectedAction, setSelectedAction, selectedHex, setSelectedHex, resetActionState,
-  sailState, setSailState
+  sailState, setSailState, targetSelection, setTargetSelection
 }) => {
   // Action-specific state
   const [buildShipType, setBuildShipType] = useState<'sloops' | 'galleon'>('sloops');
@@ -170,6 +172,18 @@ export const GameUI: React.FC<GameUIProps> = ({
     setSinkSloopMoves([]);
     setSinkSloopMoveSource(null);
   }, [selectedAction]);
+
+  // Sync targetSelection (from clicking ships on board) with local state
+  useEffect(() => {
+    if (targetSelection) {
+      if (selectedAction === ActionType.STEAL) {
+        setStealTargetPlayer(targetSelection.playerId);
+      } else if (selectedAction === ActionType.SINK) {
+        setSinkTargetPlayer(targetSelection.playerId);
+        setSinkTargetShip(targetSelection.shipType);
+      }
+    }
+  }, [targetSelection, selectedAction]);
 
   // Handle SAIL action hex clicks
   useEffect(() => {
