@@ -1,6 +1,7 @@
 import { GamePhase, WindDirection, StateChangeCallback, GAME_CONSTANTS } from '../types/GameTypes';
 import { Player } from './Player';
 import { Board } from './Board';
+import { ChartDeck } from './ChartDeck';
 
 /**
  * Central game state manager with observer pattern
@@ -16,6 +17,10 @@ export class GameState {
   public gameOver: boolean;
   public winner: Player | null;
 
+  // Chart deck and wind token
+  public chartDeck: ChartDeck;
+  public windTokenHolder: string | null; // Player ID who has wind token
+
   private observers: StateChangeCallback[];
 
   constructor() {
@@ -27,6 +32,8 @@ export class GameState {
     this.windDirection = WindDirection.CLOCKWISE;
     this.gameOver = false;
     this.winner = null;
+    this.chartDeck = new ChartDeck();
+    this.windTokenHolder = null;
     this.observers = [];
   }
 
@@ -226,5 +233,28 @@ export class GameState {
    */
   forceUpdate(): void {
     this.notifyObservers();
+  }
+
+  /**
+   * Give the wind token to a player
+   */
+  giveWindToken(playerId: string): void {
+    this.windTokenHolder = playerId;
+    const player = this.getPlayer(playerId);
+    console.log(`[GameState] ${player?.name || playerId} received the Wind token`);
+  }
+
+  /**
+   * Check if a player has the wind token
+   */
+  hasWindToken(playerId: string): boolean {
+    return this.windTokenHolder === playerId;
+  }
+
+  /**
+   * Remove the wind token from current holder
+   */
+  removeWindToken(): void {
+    this.windTokenHolder = null;
   }
 }

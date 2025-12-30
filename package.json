@@ -1,21 +1,29 @@
 {
   "name": "notorious",
   "version": "1.0.0",
-  "description": "Browser-based version of the Notorious board game using Phaser.js",
+  "description": "Browser-based version of the Notorious board game using boardgame.io and React",
   "main": "dist/bundle.js",
   "scripts": {
     "start": "webpack serve --mode development",
     "build": "webpack --mode production",
-    "dev": "webpack --mode development --watch"
+    "dev": "webpack --mode development --watch",
+    "server": "node src/server.js"
   },
-  "keywords": ["phaser", "game", "board-game", "hex-grid", "pirates"],
+  "keywords": [
+    "boardgame.io",
+    "react",
+    "game",
+    "board-game",
+    "hex-grid",
+    "pirates",
+    "multiplayer"
+  ],
   "author": "",
   "license": "MIT",
-  "dependencies": {
-    "phaser": "^3.80.1"
-  },
   "devDependencies": {
     "@types/node": "^20.11.17",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
     "copy-webpack-plugin": "^12.0.2",
     "html-webpack-plugin": "^5.6.0",
     "ts-loader": "^9.5.1",
@@ -23,5 +31,10 @@
     "webpack": "^5.90.1",
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^4.15.1"
+  },
+  "dependencies": {
+    "boardgame.io": "^0.50.2",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3"
   }
 }

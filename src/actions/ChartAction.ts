@@ -1,27 +1,37 @@
 import { BaseAction } from './Action';
-import { ActionType, ActionResult, ValidationResult, WindDirection } from '../types/GameTypes';
+import { ActionType, ActionResult, ValidationResult } from '../types/GameTypes';
 import { GameState } from '../core/GameState';
+import { AnyChart } from '../core/Chart';
 
 /**
  * Chart Action: Draw two charts and keep one. Gain the Wind Token.
  *
- * Bribe: Either draw another chart or keep an extra chart.
+ * Base: Draw 2 charts, keep 1
+ * Bribe 1: Draw 3 instead of 2
+ * Bribe 2: Keep 2 instead of 1
  *
- * Note: For MVP without full chart system, this mainly handles Wind token
+ * This action has a two-phase execution:
+ * 1. First execute: Draw charts, return them for UI selection
+ * 2. Second execute (after selection): Add selected charts to player hand
  */
 export class ChartAction extends BaseAction {
   private drawExtra: boolean; // If true, draw 3 instead of 2
   private keepExtra: boolean; // If true, keep 2 instead of 1
+  private selectedChartIds: string[]; // IDs of charts player chose to keep
+  private drawnCharts: AnyChart[] | null; // Charts that were drawn (for UI)
 
   constructor(
     playerId: string,
     bribesUsed: number = 0,
     drawExtra: boolean = false,
-    keepExtra: boolean = false
+    keepExtra: boolean = false,
+    selectedChartIds: string[] = []
   ) {
     super(ActionType.CHART, playerId, bribesUsed);
     this.drawExtra = drawExtra;
     this.keepExtra = keepExtra;
+    this.selectedChartIds = selectedChartIds;
+    this.drawnCharts = null;
   }
 
   validate(gameState: GameState): ValidationResult {
@@ -35,6 +45,17 @@ export class ChartAction extends BaseAction {
       return { valid: false, reason: 'Not enough doubloons for bribes' };
     }
 
+    // If selection phase, validate selection
+    if (this.selectedChartIds.length > 0) {
+      const keepCount = this.keepExtra ? 2 : 1;
+      if (this.selectedChartIds.length !== keepCount) {
+        return {
+          valid: false,
+          reason: `Must select exactly ${keepCount} chart(s) to keep`
+        };
+      }
+    }
+
     return { valid: true };
   }
 
@@ -45,44 +66,124 @@ export class ChartAction extends BaseAction {
     }
 
     const player = this.getPlayer(gameState)!;
+    const drawCount = this.drawExtra ? 3 : 2;
+    const keepCount = this.keepExtra ? 2 : 1;
 
-    // Spend doubloons for bribes
-    if (this.bribesUsed > 0) {
-      player.spendDoubloons(this.bribesUsed);
+    // If no selection has been made yet, draw charts and return for UI
+    if (this.selectedChartIds.length === 0 && this.drawnCharts === null) {
+      // Spend doubloons for bribes
+      if (this.bribesUsed > 0) {
+        player.spendDoubloons(this.bribesUsed);
+        console.log(`[ChartAction] ${player.name} spent ${this.bribesUsed} doubloon(s) for bribes`);
+      }
+
+      // Draw charts from deck
+      const drawnCharts = gameState.chartDeck.drawCharts(drawCount);
+      this.drawnCharts = drawnCharts;
+
+      console.log(`[ChartAction] ${player.name} drew ${drawnCharts.length} charts`);
+
+      // Return special result that signals UI to show chart selection
+      return {
+        success: false, // Not complete yet
+        message: 'CHART_SELECTION_REQUIRED',
+        notorietyGained: 0,
+        doubloonsGained: 0,
+        drawnCharts: drawnCharts // Include drawn charts for UI
+      };
     }
 
-    // Give player the Wind token (toggle wind direction)
-    // Player can now control turn order direction
-    // For now, we'll just award a doubloon as a placeholder reward
-    player.gainDoubloons(1);
+    // Selection has been made - finalize the action
+    const chartsToKeep: AnyChart[] = [];
+    const chartsToDiscard: AnyChart[] = [];
 
-    // TODO: Implement actual chart drawing when chart system is ready
-    const chartsDrawn = this.drawExtra ? 3 : 2;
-    const chartsKept = this.keepExtra ? 2 : 1;
+    // Use the previously drawn charts or draw new ones
+    const charts = this.drawnCharts || gameState.chartDeck.drawCharts(drawCount);
+
+    // Sort charts into keep and discard based on selection
+    for (const chart of charts) {
+      if (this.selectedChartIds.includes(chart.id)) {
+        chartsToKeep.push(chart);
+      } else {
+        chartsToDiscard.push(chart);
+      }
+    }
+
+    // Add kept charts to player's hand
+    for (const chart of chartsToKeep) {
+      player.addChart(chart);
+    }
+
+    // Discard the rest
+    gameState.chartDeck.discardCharts(chartsToDiscard);
+
+    // Give the Wind token
+    gameState.giveWindToken(this.playerId);
+
+    console.log(`[ChartAction] ${player.name} kept ${chartsToKeep.length} chart(s), discarded ${chartsToDiscard.length}`);
 
     gameState.forceUpdate();
 
     return this.createSuccessResult(
-      `Drew ${chartsDrawn} chart(s), kept ${chartsKept}. Gained Wind token (+1 doubloon)`,
+      `Drew ${drawCount}, kept ${keepCount}. Gained Wind token`,
       0,
-      1
+      0
     );
   }
 
   describe(): string {
-    let desc = 'Chart: Draw charts, get Wind token';
-    if (this.drawExtra) desc += ' (draw +1)';
-    if (this.keepExtra) desc += ' (keep +1)';
-    return desc;
+    const drawCount = this.drawExtra ? 3 : 2;
+    const keepCount = this.keepExtra ? 2 : 1;
+    return `Chart: Draw ${drawCount}, keep ${keepCount}, gain Wind token`;
   }
 
   /**
-   * Helper: Create a standard Chart action
+   * Get bribe cost for this action
+   * Each bribe costs 1 doubloon
    */
-  static createStandard(playerId: string, bribeType?: 'draw' | 'keep'): ChartAction {
-    const bribes = bribeType ? 1 : 0;
-    const drawExtra = bribeType === 'draw';
-    const keepExtra = bribeType === 'keep';
-    return new ChartAction(playerId, bribes, drawExtra, keepExtra);
+  getBribeCost(): number {
+    return this.bribesUsed;
+  }
+
+  /**
+   * Create a ChartAction with selection already made
+   * Used when re-executing after UI selection
+   */
+  static createWithSelection(
+    playerId: string,
+    bribesUsed: number,
+    drawExtra: boolean,
+    keepExtra: boolean,
+    selectedChartIds: string[]
+  ): ChartAction {
+    return new ChartAction(playerId, bribesUsed, drawExtra, keepExtra, selectedChartIds);
+  }
+
+  /**
+   * Helper: Create a standard Chart action (no bribes)
+   */
+  static createStandard(playerId: string): ChartAction {
+    return new ChartAction(playerId, 0, false, false);
+  }
+
+  /**
+   * Helper: Create Chart action with draw extra bribe
+   */
+  static createDrawExtra(playerId: string): ChartAction {
+    return new ChartAction(playerId, 1, true, false);
+  }
+
+  /**
+   * Helper: Create Chart action with keep extra bribe
+   */
+  static createKeepExtra(playerId: string): ChartAction {
+    return new ChartAction(playerId, 1, false, true);
+  }
+
+  /**
+   * Helper: Create Chart action with both bribes
+   */
+  static createBothBribes(playerId: string): ChartAction {
+    return new ChartAction(playerId, 2, true, true);
   }
 }

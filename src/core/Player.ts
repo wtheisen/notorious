@@ -1,5 +1,6 @@
 import { PlayerColor, ActionType, ShipInventory, GAME_CONSTANTS } from '../types/GameTypes';
 import { HexCoord } from '../types/CoordinateTypes';
+import { AnyChart } from './Chart';
 
 /**
  * Represents a player in the game
@@ -18,6 +19,9 @@ export class Player {
 
   // Captain placements during PLACE phase
   public placedCaptains: ActionType[];
+
+  // Charts held by player (hidden from other players)
+  public charts: AnyChart[];
 
   // Pirate ability (simplified for MVP - just a name for now)
   public pirateName: string;
@@ -45,6 +49,7 @@ export class Player {
     };
     this.portLocation = null;
     this.placedCaptains = [];
+    this.charts = [];
   }
 
   /**
@@ -164,5 +169,48 @@ export class Player {
    */
   setPortLocation(coord: HexCoord): void {
     this.portLocation = coord;
+  }
+
+  /**
+   * Add a chart to player's hand
+   */
+  addChart(chart: AnyChart): void {
+    this.charts.push(chart);
+    console.log(`[Player] ${this.name} gained chart: ${chart.type}`);
+  }
+
+  /**
+   * Remove a chart from player's hand
+   * Returns true if chart was found and removed, false otherwise
+   */
+  removeChart(chartId: string): boolean {
+    const index = this.charts.findIndex(c => c.id === chartId);
+    if (index !== -1) {
+      const removed = this.charts.splice(index, 1)[0];
+      console.log(`[Player] ${this.name} removed chart: ${removed.type}`);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Get all charts held by player
+   */
+  getCharts(): AnyChart[] {
+    return [...this.charts];
+  }
+
+  /**
+   * Check if player has a specific chart
+   */
+  hasChart(chartId: string): boolean {
+    return this.charts.some(c => c.id === chartId);
+  }
+
+  /**
+   * Get the number of charts held by player
+   */
+  getChartCount(): number {
+    return this.charts.length;
   }
 }

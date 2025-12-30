@@ -127,7 +127,8 @@ export function getDirection(from: HexCoord, to: HexCoord): number {
 export function findPath(
   start: HexCoord,
   end: HexCoord,
-  isBlocked: (coord: HexCoord) => boolean
+  isBlocked: (coord: HexCoord) => boolean,
+  canTraverse?: (from: HexCoord, to: HexCoord) => boolean
 ): HexCoord[] {
   if (hexEquals(start, end)) return [start];
   if (isBlocked(end)) return [];
@@ -144,6 +145,11 @@ export function findPath(
 
       if (visited.has(key)) continue;
       if (isBlocked(neighbor)) continue;
+
+      // NEW: Check if edge between hexes is traversable (for island edges)
+      if (canTraverse && !canTraverse(current.coord, neighbor)) {
+        continue;
+      }
 
       visited.add(key);
       const newPath = [...current.path, neighbor];

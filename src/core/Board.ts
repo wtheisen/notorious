@@ -158,14 +158,22 @@ export class Board {
   }
 
   /**
-   * Find a path between two hexes for a player
-   * Considers island edges and returns empty array if no path exists
+   * Find a path between two hexes
+   * Considers island impassable edges and returns empty array if no path exists
    */
   findPath(from: HexCoord, to: HexCoord): HexCoord[] {
-    return findPath(from, to, (coord) => {
-      // A hex is blocked if it's not on the board
-      return !isOnBoard(coord);
-    });
+    return findPath(
+      from,
+      to,
+      (coord) => {
+        // A hex is blocked if it's not on the board
+        return !isOnBoard(coord);
+      },
+      (fromHex, toHex) => {
+        // Check if we can sail between these two hexes (respects island edges)
+        return this.canSailBetween(fromHex, toHex);
+      }
+    );
   }
 
   /**

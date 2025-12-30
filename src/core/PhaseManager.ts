@@ -1,5 +1,6 @@
 import { GameState } from './GameState';
 import { GamePhase, ActionType, GAME_CONSTANTS } from '../types/GameTypes';
+import { IslandPlacer } from './IslandPlacer';
 
 /**
  * Manages game phase transitions and phase-specific logic
@@ -64,6 +65,12 @@ export class PhaseManager {
 
     // Award notoriety for hex control
     this.awardNotorietyForControl();
+
+    // NEW: Add doubloons to unclaimed Island Raids
+    this.gameState.chartDeck.addDoubloonsToIslandRaids();
+
+    // NEW: Check if 2nd Island Raid should be revealed
+    this.checkIslandRaidReveal();
 
     // Check for captain unlocks
     this.checkCaptainUnlocks();
@@ -184,9 +191,57 @@ export class PhaseManager {
     console.log('[PhaseManager] Starting new game');
     this.gameState.currentPhase = GamePhase.SETUP;
     this.gameState.currentRound = 1;
+
+    // NEW: Place islands and initialize chart deck
+    this.setupIslandsAndCharts();
+
     this.gameState.forceUpdate();
 
     // Auto-advance to first real phase
     this.advancePhase();
+  }
+
+  /**
+   * Setup islands and chart deck
+   * Called during game initialization
+   */
+  private setupIslandsAndCharts(): void {
+    console.log('[PhaseManager] Setting up islands and charts');
+
+    // Place 5 islands randomly
+    const islandPlacer = new IslandPlacer();
+    const { islands, remainingTreasureMaps } = islandPlacer.placeIslands(this.gameState.board);
+
+    console.log(`[PhaseManager] Placed ${islands.length} islands`);
+
+    // Initialize chart deck with remaining Treasure Maps
+    this.gameState.chartDeck.initializeDeck(
+      this.gameState.players.length,
+      islands,
+      remainingTreasureMaps
+    );
+
+    console.log(`[PhaseManager] Initialized chart deck with ${remainingTreasureMaps.length} Treasure Maps`);
+
+    // TODO: Deal Smuggler Routes to players (will need UI for selection)
+    // For now, we skip this step - will implement in Chart Action phase
+  }
+
+  /**
+   * Check if 2nd Island Raid should be revealed
+   * Revealed when any player reaches 12 notoriety
+   */
+  private checkIslandRaidReveal(): void {
+    const activeRaids = this.gameState.chartDeck.getActiveIslandRaids();
+    if (activeRaids.length >= 2) {
+      return; // Already revealed both
+    }
+
+    // Check if any player has reached 12 notoriety
+    const hasPlayerAt12 = this.gameState.players.some(p => p.notoriety >= 12);
+    if (hasPlayerAt12) {
+      console.log('[PhaseManager] Player reached 12 notoriety, revealing 2nd Island Raid');
+      this.gameState.chartDeck.revealSecondIslandRaid();
+    }
   }
 }
