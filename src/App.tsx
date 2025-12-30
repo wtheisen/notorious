@@ -18,14 +18,29 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
   const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
 
+  // Track last AI move to prevent infinite retries
+  const [lastAIMove, setLastAIMove] = useState<{ player: string; turn: number } | null>(null);
+
   // AI move handling - automatically execute moves for AI players
   useEffect(() => {
     // Check if it's an AI's turn
     const isAITurn = AI_PLAYER_IDS.includes(ctx.currentPlayer);
     if (isAITurn && !ctx.gameover) {
+      // Prevent infinite loops - only try once per turn
+      const turnKey = { player: ctx.currentPlayer, turn: ctx.turn };
+      if (lastAIMove && lastAIMove.player === turnKey.player && lastAIMove.turn === turnKey.turn) {
+        console.log(`[AI] Already tried this turn, passing...`);
+        if (moves.pass) {
+          moves.pass();
+        }
+        return;
+      }
+
       const aiDelay = 500; // Half second delay for AI moves
 
       const timer = setTimeout(() => {
+        setLastAIMove(turnKey);
+
         // Get possible moves for AI
         const possibleMoves = enumerateMoves(G, ctx);
 
@@ -41,16 +56,18 @@ const NotoriousBoard = ({ G, ctx, moves, playerID }: any) => {
           if (moves[randomMove.move]) {
             moves[randomMove.move](...randomMove.args);
           } else {
-            console.error(`[AI] Move not found:`, randomMove.move);
+            console.error(`[AI] Move not found:`, randomMove.move, '- passing instead');
+            if (moves.pass) moves.pass();
           }
         } else {
-          console.warn(`[AI Player ${ctx.currentPlayer}] No valid moves found!`);
+          console.warn(`[AI Player ${ctx.currentPlayer}] No valid moves found - passing`);
+          if (moves.pass) moves.pass();
         }
       }, aiDelay);
 
       return () => clearTimeout(timer);
     }
-  }, [ctx.currentPlayer, ctx.phase, ctx.turn, G, moves, ctx.gameover]);
+  }, [ctx.currentPlayer, ctx.phase, ctx.turn, G, moves, ctx.gameover, lastAIMove]);
 
   // Handle hex clicks from the board
   const handleHexClick = (coord: HexCoord) => {

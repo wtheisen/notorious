@@ -354,22 +354,35 @@ export const NotoriousGame: Game<NotoriousState> = {
 
       turn: {
         order: {
-          first: () => 0,
-          next: ({ G, ctx }) => {
-            // Custom turn order based on wind direction
-            if (G.windDirection === WindDirection.CLOCKWISE) {
-              return (ctx.playOrderPos + 1) % ctx.numPlayers;
-            } else {
-              return (ctx.playOrderPos - 1 + ctx.numPlayers) % ctx.numPlayers;
+          first: ({ G }) => {
+            // Find first player with captains to execute
+            for (let i = 0; i < G.players.length; i++) {
+              if (G.players[i].placedCaptains.length > 0) {
+                return i;
+              }
             }
-          }
-        },
+            return 0;
+          },
+          next: ({ G, ctx }) => {
+            // Find next player with captains to execute
+            const numPlayers = ctx.numPlayers;
+            let nextPos = ctx.playOrderPos;
 
-        onBegin: ({ G, ctx, events }) => {
-          // Skip players with no captains left
-          const player = G.players[parseInt(ctx.currentPlayer)];
-          if (player.placedCaptains.length === 0) {
-            events?.endTurn();
+            for (let i = 0; i < numPlayers; i++) {
+              if (G.windDirection === WindDirection.CLOCKWISE) {
+                nextPos = (nextPos + 1) % numPlayers;
+              } else {
+                nextPos = (nextPos - 1 + numPlayers) % numPlayers;
+              }
+
+              const nextPlayer = G.players[nextPos];
+              if (nextPlayer.placedCaptains.length > 0) {
+                return nextPos;
+              }
+            }
+
+            // No players with captains left
+            return undefined;
           }
         }
       },
