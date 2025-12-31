@@ -21,6 +21,90 @@ function getPlayerColorForUI(playerId: string): string {
   return colors[playerId] || '#888888';
 }
 
+/**
+ * Check if an action has valid targets
+ * Returns { valid: boolean, reason?: string }
+ */
+function checkActionValidity(
+  action: ActionType,
+  G: NotoriousState,
+  playerId: string
+): { valid: boolean; reason?: string } {
+  const player = G.players.find(p => p.id === playerId);
+  if (!player) return { valid: false, reason: 'Player not found' };
+
+  const allHexes = Object.values(G.board.hexes);
+
+  switch (action) {
+    case ActionType.SAIL: {
+      // Need at least one movable ship on the board
+      const hasMovableShip = allHexes.some(hex =>
+        hex.ships.some(s => s.playerId === playerId && s.type !== ShipType.PORT)
+      );
+      if (!hasMovableShip) {
+        return { valid: false, reason: 'No ships on board to move' };
+      }
+      return { valid: true };
+    }
+
+    case ActionType.BUILD: {
+      // Need ships in inventory to place
+      const canBuildSloops = player.ships.sloops >= 2;
+      const canBuildGalleon = player.ships.galleons >= 1;
+      if (!canBuildSloops && !canBuildGalleon) {
+        return { valid: false, reason: 'No ships in inventory to build' };
+      }
+      // Need a hex where player has presence (ships or port)
+      const hasPresence = allHexes.some(hex =>
+        hex.ships.some(s => s.playerId === playerId)
+      );
+      if (!hasPresence) {
+        return { valid: false, reason: 'No hexes with your ships to build at' };
+      }
+      return { valid: true };
+    }
+
+    case ActionType.STEAL: {
+      // Need a hex where player has ships AND opponent has sloop
+      const canSteal = allHexes.some(hex => {
+        const playerShips = hex.ships.filter(s => s.playerId === playerId);
+        const opponentSloops = hex.ships.filter(s => s.playerId !== playerId && s.type === ShipType.SLOOP);
+        return playerShips.length > 0 && opponentSloops.length > 0;
+      });
+      if (!canSteal) {
+        return { valid: false, reason: 'No hexes where you can steal (need your ship + opponent sloop)' };
+      }
+      return { valid: true };
+    }
+
+    case ActionType.SINK: {
+      // Check if power allows sinking
+      const power = getPowerStrategy(player.piratePower);
+      if (!power.canUseSink()) {
+        return { valid: false, reason: `${power.name} cannot use Sink action` };
+      }
+      // Need a hex where player has ships AND opponent has ships (not ports)
+      const canSink = allHexes.some(hex => {
+        const playerShips = hex.ships.filter(s => s.playerId === playerId);
+        const opponentShips = hex.ships.filter(s => s.playerId !== playerId && s.type !== ShipType.PORT);
+        return playerShips.length > 0 && opponentShips.length > 0;
+      });
+      if (!canSink) {
+        return { valid: false, reason: 'No hexes where you can sink (need your ship + opponent ship)' };
+      }
+      return { valid: true };
+    }
+
+    case ActionType.CHART: {
+      // Chart is always valid - can always draw
+      return { valid: true };
+    }
+
+    default:
+      return { valid: false, reason: 'Unknown action' };
+  }
+}
+
 interface GameUIProps {
   G: NotoriousState;
   ctx: any;
@@ -406,22 +490,56 @@ export const GameUI: React.FC<GameUIProps> = ({
             <>
               <p style={styles.info}>Available captains:</p>
               <div style={styles.buttonGrid}>
-                {player.placedCaptains.map((action, index) => (
-                  <button
-                    key={`${action}-${index}`}
-                    onClick={() => setSelectedAction(action)}
-                    style={{
-                      ...styles.button,
-                      ...(selectedAction === action ? styles.buttonSelected : {})
-                    }}
-                  >
-                    {action}
-                  </button>
-                ))}
+                {player.placedCaptains.map((action, index) => {
+                  const validity = checkActionValidity(action, G, effectivePlayerID);
+                  return (
+                    <button
+                      key={`${action}-${index}`}
+                      onClick={() => setSelectedAction(action)}
+                      style={{
+                        ...styles.button,
+                        ...(selectedAction === action ? styles.buttonSelected : {}),
+                        ...(!validity.valid ? styles.buttonInvalid : {})
+                      }}
+                    >
+                      {action}
+                      {!validity.valid && <span style={{ marginLeft: '4px' }}>⚠️</span>}
+                    </button>
+                  );
+                })}
               </div>
 
+              {/* No Valid Targets Warning */}
+              {selectedAction && (() => {
+                const validity = checkActionValidity(selectedAction, G, effectivePlayerID);
+                if (!validity.valid) {
+                  return (
+                    <div style={styles.noTargetsWarning}>
+                      <div style={{ fontSize: '18px', marginBottom: '8px' }}>⚠️ No Valid Targets</div>
+                      <div style={{ marginBottom: '12px', color: '#666' }}>{validity.reason}</div>
+                      <button
+                        onClick={() => {
+                          moves.skipAction();
+                          resetActionState();
+                        }}
+                        style={{ ...styles.forfeitButton, width: '100%' }}
+                      >
+                        Forfeit Action
+                      </button>
+                      <button
+                        onClick={() => resetActionState()}
+                        style={{ ...styles.button, marginTop: '8px', width: '100%' }}
+                      >
+                        Pick Different Action
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* CHART Action Dialog */}
-              {selectedAction === ActionType.CHART && (
+              {selectedAction === ActionType.CHART && checkActionValidity(ActionType.CHART, G, effectivePlayerID).valid && (
                 <div style={styles.actionDialog}>
                   <strong>CHART Action</strong>
                   <p>Draw charts and gain Wind Token</p>
@@ -457,7 +575,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               )}
 
               {/* BUILD Action Dialog */}
-              {selectedAction === ActionType.BUILD && (
+              {selectedAction === ActionType.BUILD && checkActionValidity(ActionType.BUILD, G, effectivePlayerID).valid && (
                 <div style={styles.actionDialog}>
                   <strong>BUILD Action</strong>
                   {!selectedHex ? (
@@ -509,7 +627,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               )}
 
               {/* STEAL Action Dialog */}
-              {selectedAction === ActionType.STEAL && (
+              {selectedAction === ActionType.STEAL && checkActionValidity(ActionType.STEAL, G, effectivePlayerID).valid && (
                 <div style={styles.actionDialog}>
                   <strong>STEAL Action</strong>
                   <div style={styles.sailInfo}>
@@ -610,7 +728,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               )}
 
               {/* SINK Action Dialog */}
-              {selectedAction === ActionType.SINK && (() => {
+              {selectedAction === ActionType.SINK && checkActionValidity(ActionType.SINK, G, effectivePlayerID).valid && (() => {
                 const power = getPowerStrategy(player.piratePower);
                 const isRelentless = power.id === 'THE_RELENTLESS';
 
@@ -948,7 +1066,7 @@ export const GameUI: React.FC<GameUIProps> = ({
               })()}
 
               {/* SAIL Action Dialog */}
-              {selectedAction === ActionType.SAIL && (() => {
+              {selectedAction === ActionType.SAIL && checkActionValidity(ActionType.SAIL, G, effectivePlayerID).valid && (() => {
                 const power = getPowerStrategy(player.piratePower);
                 const baseMovementPoints = power.getSailMaxDistance(); // 2 normally, 3 for Sailor
                 const totalMovementPoints = baseMovementPoints + sailState.bribeCount;
@@ -1102,27 +1220,14 @@ export const GameUI: React.FC<GameUIProps> = ({
                 );
               })()}
 
-              {/* Cancel and Forfeit buttons */}
-              {selectedAction && (
-                <div style={{ marginTop: '15px' }}>
-                  <button
-                    onClick={() => resetActionState()}
-                    style={{...styles.button, width: '100%'}}
-                  >
-                    Cancel (Pick Different Action)
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (window.confirm('Forfeit this action? You will lose the captain without any effect.')) {
-                        moves.skipAction();
-                        resetActionState();
-                      }
-                    }}
-                    style={{...styles.forfeitButton, marginTop: '8px', width: '100%'}}
-                  >
-                    Forfeit Action (No Valid Targets)
-                  </button>
-                </div>
+              {/* Cancel button - only show when action is valid (invalid case handled above) */}
+              {selectedAction && checkActionValidity(selectedAction, G, effectivePlayerID).valid && (
+                <button
+                  onClick={() => resetActionState()}
+                  style={{...styles.button, marginTop: '15px', width: '100%'}}
+                >
+                  Cancel
+                </button>
               )}
             </>
           ) : (
@@ -1346,9 +1451,22 @@ const styles: Record<string, React.CSSProperties> = {
     backgroundColor: '#4A90E2',
     color: '#fff'
   },
+  buttonInvalid: {
+    borderColor: '#E24A4A',
+    color: '#E24A4A',
+    backgroundColor: '#fff5f5'
+  },
   buttonDisabled: {
     opacity: 0.5,
     cursor: 'not-allowed'
+  },
+  noTargetsWarning: {
+    marginTop: '15px',
+    padding: '20px',
+    backgroundColor: '#fff5f5',
+    borderRadius: '8px',
+    border: '2px solid #E24A4A',
+    textAlign: 'center' as const
   },
   chart: {
     padding: '8px',
