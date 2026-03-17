@@ -895,8 +895,55 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         <div className="game-over">
           <div className="game-over__title">GAME OVER</div>
           <div className="game-over__subtitle">
-            Winner: {G.players.find(p => p.id === ctx.gameover.winner)?.name ?? ctx.gameover.winner}
+            {G.players.find(p => p.id === ctx.gameover.winner)?.name ?? ctx.gameover.winner} claims victory!
           </div>
+          {ctx.gameover.finalScores && (
+            <table className="game-over__table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Captain</th>
+                  <th>Score</th>
+                  <th>Notoriety</th>
+                  <th>Doubloons</th>
+                  <th>Bounty</th>
+                  <th>Islands</th>
+                  <th>Galleons</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ctx.gameover.finalScores.map((score: {
+                  playerId: string;
+                  playerName: string;
+                  finalScore: number;
+                  bounty: number;
+                  notoriety: number;
+                  islandsControlled: number;
+                  galleonsOnBoard: number;
+                }, idx: number) => (
+                  <tr
+                    key={score.playerId}
+                    className={score.playerId === ctx.gameover.winner ? 'game-over__winner-row' : ''}
+                  >
+                    <td>{idx + 1}</td>
+                    <td>{score.playerName}</td>
+                    <td>{score.finalScore}</td>
+                    <td>{score.notoriety}</td>
+                    <td>{score.finalScore - score.notoriety}</td>
+                    <td>{score.bounty}</td>
+                    <td>{score.islandsControlled}</td>
+                    <td>{score.galleonsOnBoard}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <button
+            className="hud-btn hud-btn--confirm game-over__play-again"
+            onClick={() => window.location.reload()}
+          >
+            Play Again
+          </button>
         </div>
       )}
     </div>

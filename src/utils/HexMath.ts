@@ -1,4 +1,5 @@
 import { HexCoord, PixelCoord, EdgeDirection, createHexCoord, hexEquals } from '../types/CoordinateTypes';
+import { getValidNeighbors as getBoardNeighbors } from '../config/HexConstants';
 
 /**
  * Hex grid math utilities using axial coordinate system
@@ -140,7 +141,7 @@ export function findPath(
   while (queue.length > 0) {
     const current = queue.shift()!;
 
-    for (const neighbor of getAllNeighbors(current.coord)) {
+    for (const neighbor of getBoardNeighbors(current.coord)) {
       const key = `${neighbor.q},${neighbor.r}`;
 
       if (visited.has(key)) continue;

@@ -1,7 +1,7 @@
 import { BoardState, HexState, Ship, hexToKey } from '../types/GameState';
-import { HexCoord } from '../../types/CoordinateTypes';
+import { HexCoord, hexEquals } from '../../types/CoordinateTypes';
 import { Island, canSailInDirection } from '../../core/Island';
-import { BOARD_HEXES, isOnBoard, getValidNeighbors } from '../../config/HexConstants';
+import { BOARD_HEXES, isOnBoard, getValidNeighbors, getWrapDirection } from '../../config/HexConstants';
 import { areAdjacent, findPath, getDirection } from '../../utils/HexMath';
 import { GAME_CONSTANTS, ShipType } from '../../types/GameTypes';
 
@@ -30,15 +30,29 @@ export function getNeighbors(board: BoardState, coord: HexCoord): HexState[] {
 }
 
 /**
- * Check if two hexes are adjacent
+ * Check if two hexes are adjacent (including edge wrapping)
  */
 export function isAdjacent(coord1: HexCoord, coord2: HexCoord): boolean {
-  return areAdjacent(coord1, coord2) && isOnBoard(coord1) && isOnBoard(coord2);
+  if (!isOnBoard(coord1) || !isOnBoard(coord2)) return false;
+  // Use getValidNeighbors which includes wrapped neighbors
+  return getValidNeighbors(coord1).some(n => hexEquals(n, coord2));
+}
+
+/**
+ * Get the effective direction from one hex to another, considering wrapping.
+ * Returns -1 if hexes are not adjacent (directly or via wrap).
+ */
+function getEffectiveDirection(from: HexCoord, to: HexCoord): number {
+  // Try normal adjacency first
+  const dir = getDirection(from, to);
+  if (dir !== -1) return dir;
+  // Try wrap direction
+  return getWrapDirection(from, to);
 }
 
 /**
  * Check if sailing between two hexes is possible
- * Considers island impassable edges
+ * Considers island impassable edges and edge wrapping
  */
 export function canSailBetween(board: BoardState, from: HexCoord, to: HexCoord): boolean {
   if (!isAdjacent(from, to)) {
@@ -54,7 +68,7 @@ export function canSailBetween(board: BoardState, from: HexCoord, to: HexCoord):
 
   // Check if fromHex has an island with an impassable edge in the direction of toHex
   if (fromHex.island) {
-    const direction = getDirection(from, to);
+    const direction = getEffectiveDirection(from, to);
     if (direction !== -1 && !canSailInDirection(fromHex.island, direction)) {
       return false;
     }
@@ -62,7 +76,7 @@ export function canSailBetween(board: BoardState, from: HexCoord, to: HexCoord):
 
   // Check if toHex has an island with an impassable edge in the direction of fromHex
   if (toHex.island) {
-    const direction = getDirection(to, from);
+    const direction = getEffectiveDirection(to, from);
     if (direction !== -1 && !canSailInDirection(toHex.island, direction)) {
       return false;
     }

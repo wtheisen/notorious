@@ -428,3 +428,62 @@
   font-size: 1rem;
   color: #d4c5a0;
 }
+
+.game-over__table {
+  border-collapse: collapse;
+  margin-top: 16px;
+  background: #e8dcc4;
+  border: 2px solid #8b7355;
+  border-radius: 5px;
+  overflow: hidden;
+  font-family: var(--font-body);
+  color: #3b2a1a;
+}
+
+.game-over__table th {
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 8px 14px;
+  background: #d6c6a4;
+  border-bottom: 2px solid #8b7355;
+  color: #5c3a1e;
+}
+
+.game-over__table td {
+  padding: 7px 14px;
+  font-size: 0.85rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(139, 115, 85, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+.game-over__table th:first-child,
+.game-over__table td:first-child {
+  text-align: center;
+  width: 32px;
+}
+
+.game-over__table th:nth-child(2),
+.game-over__table td:nth-child(2) {
+  text-align: left;
+}
+
+.game-over__winner-row {
+  background: rgba(184, 150, 62, 0.25);
+  font-weight: 600;
+}
+
+.game-over__winner-row td:nth-child(2)::before {
+  content: '\2655 ';
+}
+
+.game-over__play-again {
+  margin-top: 20px;
+  padding: 10px 28px;
+  font-size: 0.9rem;
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+}
