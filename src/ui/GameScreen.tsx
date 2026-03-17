@@ -6,6 +6,7 @@ import { GameRenderer } from '../renderer/GameRenderer';
 import { hexToWorld } from '../renderer/helpers/HexGeometry';
 import type { NotoriousState } from '../game/types/GameState';
 import { hexToKey, HexCoord, hexEquals } from '../types/CoordinateTypes';
+import { getValidNeighbors } from '../config/HexConstants';
 import { ActionType, ShipType } from '../types/GameTypes';
 import { getPowerStrategy } from '../core/powers';
 import { getReachableHexes, SailCheckFn } from '../game/logic/SailLogic';
@@ -34,16 +35,16 @@ type InteractionMode =
   | { type: 'idle' }
   | { type: 'setup' }
   | { type: 'place_captain' }
-  | { type: 'sail'; pointsLeft: number; totalPoints: number; queuedMoves: SailMove[] }
-  | { type: 'sail_dragging'; pointsLeft: number; totalPoints: number; queuedMoves: SailMove[]; shipType: ShipType; fromHex: HexCoord; reachable: Map<string, number> }
+  | { type: 'sail'; pointsLeft: number; totalPoints: number; bribesUsed: number; queuedMoves: SailMove[] }
+  | { type: 'sail_dragging'; pointsLeft: number; totalPoints: number; bribesUsed: number; queuedMoves: SailMove[]; shipType: ShipType; fromHex: HexCoord; reachable: Map<string, number> }
   | { type: 'build_select_hex' }
   | { type: 'build_confirm'; hex: HexCoord }
   | { type: 'steal_select_hex' }
   | { type: 'steal_confirm'; hex: HexCoord }
-  | { type: 'sink_select_hex' }
-  | { type: 'sink_premove'; sloopMoves: { from: HexCoord; to: HexCoord }[] }
+  | { type: 'sink_select_hex'; sloopMoves: { from: HexCoord; to: HexCoord }[] }
+  | { type: 'sink_premove'; sloopMoves: { from: HexCoord; to: HexCoord }[]; selectedSloop: HexCoord | null; validDests: string[] }
   | { type: 'sink_confirm'; hex: HexCoord; sloopMoves: { from: HexCoord; to: HexCoord }[] }
-  | { type: 'chart_pick'; drawnCharts: AnyChart[]; keepCount: number }
+  | { type: 'chart_pick'; drawnCharts: AnyChart[]; keepCount: number; maxDoubloons: number }
   | { type: 'pirate' };
 
 export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
@@ -88,7 +89,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   // Helper: enter sail mode
   const enterSailMode = useCallback((existingMoves: SailMove[] = [], existingPointsUsed = 0) => {
     const pointsLeft = sailBasePoints - existingPointsUsed;
-    setMode({ type: 'sail', pointsLeft, totalPoints: sailBasePoints, queuedMoves: existingMoves });
+    setMode({ type: 'sail', pointsLeft, totalPoints: sailBasePoints, bribesUsed: 0, queuedMoves: existingMoves });
     setSelectedAction(ActionType.SAIL);
   }, [sailBasePoints]);
 
@@ -155,10 +156,14 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       // Determine points left: if already in sail mode, use existing; otherwise start fresh
       const m = modeRef.current;
       let pointsLeft = sailBasePoints;
+      let totalPoints = sailBasePoints;
       let queuedMoves: SailMove[] = [];
+      let bribesUsed = 0;
       if (m.type === 'sail') {
         pointsLeft = m.pointsLeft;
+        totalPoints = m.totalPoints;
         queuedMoves = m.queuedMoves;
+        bribesUsed = m.bribesUsed;
       }
 
       // Limit reachable to remaining points (capped by ship's max distance)
@@ -180,8 +185,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       renderer.setHighlights(Array.from(reachable.keys()), 'valid');
 
       setMode({
-        type: 'sail_dragging', pointsLeft, totalPoints: sailBasePoints,
-        queuedMoves, shipType: ship.type, fromHex: coord, reachable,
+        type: 'sail_dragging', pointsLeft, totalPoints,
+        bribesUsed, queuedMoves, shipType: ship.type, fromHex: coord, reachable,
       });
       setSelectedAction(ActionType.SAIL);
     });
@@ -222,13 +227,13 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         } else {
           // Points remaining — pending move keeps drag lock so syncState doesn't clobber
           renderer.clearHighlights();
-          setMode({ type: 'sail', pointsLeft: newPointsLeft, totalPoints: m.totalPoints, queuedMoves: allMoves });
+          setMode({ type: 'sail', pointsLeft: newPointsLeft, totalPoints: m.totalPoints, bribesUsed: m.bribesUsed, queuedMoves: allMoves });
         }
       } else {
         // Invalid drop - snap back
         if (shipMesh) renderer.snapShipToHex(shipMesh, hexToKey(from), G);
         renderer.clearHighlights();
-        setMode({ type: 'sail', pointsLeft: m.pointsLeft, totalPoints: m.totalPoints, queuedMoves: m.queuedMoves });
+        setMode({ type: 'sail', pointsLeft: m.pointsLeft, totalPoints: m.totalPoints, bribesUsed: m.bribesUsed, queuedMoves: m.queuedMoves });
       }
     });
   }, [G, ctx.currentPlayer, phase, currentPlayer, sailMaxDist, sailBasePoints, moves, submitSail]);
@@ -285,19 +290,55 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         }
 
         case 'sink_select_hex': {
+          // Account for sloop pre-moves: a sloop moved to this hex counts as player presence
           const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
+          const sloopMovedHere = mode.sloopMoves.some(m => hexEquals(m.to, coord));
           const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
-          if (myShips.length > 0 && enemyShips.length > 0) {
-            // Go to confirm dialog (which allows picking target + shows cost)
-            setMode({ type: 'sink_confirm', hex: coord, sloopMoves: [] });
+          if ((myShips.length > 0 || sloopMovedHere) && enemyShips.length > 0) {
+            setMode({ type: 'sink_confirm', hex: coord, sloopMoves: mode.sloopMoves });
           }
           break;
         }
 
         case 'sink_premove': {
-          // Clicking a hex selects destination for sloop pre-move
-          // Then transition to sink_select_hex to pick target hex
-          // For now this is a placeholder - pre-move is handled in the dialog
+          if (mode.selectedSloop) {
+            // A sloop is selected — clicking a valid destination queues the move
+            if (mode.validDests.includes(key)) {
+              const newMoves = [...mode.sloopMoves, { from: mode.selectedSloop, to: coord }];
+              setMode({ type: 'sink_premove', sloopMoves: newMoves, selectedSloop: null, validDests: [] });
+            } else {
+              // Clicked elsewhere — deselect
+              setMode({ ...mode, selectedSloop: null, validDests: [] });
+            }
+          } else {
+            // No sloop selected — check doubloon budget first
+            const isRelentless = currentPlayer.piratePower === PiratePower.THE_RELENTLESS;
+            const currentMoveCost = power
+              ? power.modifySinkCost(mode.sloopMoves.length + 1, { movingSloop: true })
+              : mode.sloopMoves.length + 1;
+            if (currentMoveCost > currentPlayer.doubloons) break; // can't afford another move
+
+            // Account for sloops already moved (track their current positions)
+            const movedTo = mode.sloopMoves.map(m => hexToKey(m.to));
+            const originalSloops = hex.ships.filter(
+              s => s.playerId === ctx.currentPlayer && s.type === ShipType.SLOOP
+            ).length;
+            const movedAway = mode.sloopMoves.filter(m => hexEquals(m.from, coord)).length;
+            const movedHere = movedTo.filter(k => k === key).length;
+            const sloopsHere = originalSloops - movedAway + movedHere;
+
+            if (sloopsHere > 0) {
+              // Compute valid adjacent destinations
+              const neighbors = getValidNeighbors(coord);
+              const validDests = neighbors
+                .filter(n => {
+                  const nKey = hexToKey(n);
+                  return G.board.hexes[nKey] && canSailBetween(G.board, coord, n);
+                })
+                .map(n => hexToKey(n));
+              setMode({ ...mode, selectedSloop: coord, validDests });
+            }
+          }
           break;
         }
       }
@@ -344,11 +385,38 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         const hasEnemy = hex.ships.some(s => s.playerId !== ctx.currentPlayer);
         if ((myShips.length > 0 || isPort) && (!hasEnemy || isPort)) renderer.setHighlights([key], 'valid');
       }
-    } else if (mode.type === 'steal_select_hex' || mode.type === 'sink_select_hex') {
+    } else if (mode.type === 'steal_select_hex') {
       for (const [key, hex] of Object.entries(G.board.hexes)) {
         const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
         const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
         if (myShips.length > 0 && enemyShips.length > 0) renderer.setHighlights([key], 'valid');
+      }
+    } else if (mode.type === 'sink_select_hex') {
+      const sloopDestKeys = new Set(mode.sloopMoves.map(m => hexToKey(m.to)));
+      for (const [key, hex] of Object.entries(G.board.hexes)) {
+        const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
+        const sloopMovedHere = sloopDestKeys.has(key);
+        const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
+        if ((myShips.length > 0 || sloopMovedHere) && enemyShips.length > 0) renderer.setHighlights([key], 'valid');
+      }
+    } else if (mode.type === 'sink_premove') {
+      if (mode.selectedSloop) {
+        // Highlight selected sloop and valid destinations
+        renderer.setHighlights([hexToKey(mode.selectedSloop)], 'selected');
+        renderer.setHighlights(mode.validDests, 'valid');
+      } else {
+        // Highlight hexes with our sloops (accounting for queued moves)
+        const movedTo = mode.sloopMoves.map(m => hexToKey(m.to));
+        for (const [key, hex] of Object.entries(G.board.hexes)) {
+          const originalSloops = hex.ships.filter(
+            s => s.playerId === ctx.currentPlayer && s.type === ShipType.SLOOP
+          ).length;
+          const movedAway = mode.sloopMoves.filter(m => hexToKey(m.from) === key).length;
+          const movedHere = movedTo.filter(k => k === key).length;
+          if (originalSloops - movedAway + movedHere > 0) {
+            renderer.setHighlights([key], 'valid');
+          }
+        }
       }
     }
   }, [G, mode, ctx.currentPlayer]);
@@ -362,24 +430,29 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       case ActionType.SAIL: enterSailMode(); break;
       case ActionType.BUILD: setMode({ type: 'build_select_hex' }); break;
       case ActionType.STEAL: setMode({ type: 'steal_select_hex' }); break;
-      case ActionType.SINK: setMode({ type: 'sink_select_hex' }); break;
+      case ActionType.SINK: {
+        setMode({ type: 'sink_premove', sloopMoves: [], selectedSloop: null, validDests: [] });
+        break;
+      }
       case ActionType.CHART: {
-        // Peek at what we'll draw (base: 2 charts, keep 1)
-        const drawCount = 2;
-        const keepCount = 1;
-        const peeked = G.chartDeck.drawPile.slice(0, Math.min(drawCount, G.chartDeck.drawPile.length));
-        if (peeked.length === 0) { break; } // nothing to draw
-        if (peeked.length <= keepCount) {
-          // Auto-keep all if drawing <= keep count
+        // Peek at extra charts in case player wants to bribe for more draws
+        const baseDrawCount = 2;
+        const baseKeepCount = 1;
+        const maxBribes = currentPlayer.doubloons;
+        // Pre-peek up to baseDrawCount + maxBribes (capped by deck size)
+        const maxPeek = Math.min(baseDrawCount + maxBribes, G.chartDeck.drawPile.length);
+        const peeked = G.chartDeck.drawPile.slice(0, maxPeek);
+        if (peeked.length === 0) { break; }
+        if (peeked.length <= baseKeepCount && maxBribes === 0) {
           moves.chart({ bribeChoices: [], selectedChartIds: peeked.map(c => c.id) });
           setMode({ type: 'idle' }); setSelectedAction(null);
         } else {
-          setMode({ type: 'chart_pick', drawnCharts: peeked, keepCount });
+          setMode({ type: 'chart_pick', drawnCharts: peeked, keepCount: baseKeepCount, maxDoubloons: maxBribes });
         }
         break;
       }
     }
-  }, [moves, enterSailMode]);
+  }, [moves, enterSailMode, currentPlayer, G]);
 
   // Wire action space clicks (PLACE + PLAY phases)
   useEffect(() => {
@@ -412,6 +485,18 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     }
   }, [mode, submitSail]);
 
+  const handleSailBuyPoint = useCallback(() => {
+    if (mode.type !== 'sail') return;
+    const doubloonsBudget = currentPlayer.doubloons - mode.bribesUsed;
+    if (doubloonsBudget <= 0) return;
+    setMode({
+      ...mode,
+      pointsLeft: mode.pointsLeft + 1,
+      totalPoints: mode.totalPoints + 1,
+      bribesUsed: mode.bribesUsed + 1,
+    });
+  }, [mode, currentPlayer]);
+
   // Instruction text
   let instruction = '';
   switch (mode.type) {
@@ -426,7 +511,17 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     case 'build_select_hex': instruction = 'Click a hex with your pieces to build'; break;
     case 'steal_select_hex': instruction = 'Click a shared hex to steal a sloop'; break;
     case 'sink_select_hex': instruction = 'Click a hex with your ships and enemy ships'; break;
-    case 'sink_premove': instruction = 'Click to move a sloop, then select target'; break;
+    case 'sink_premove': {
+      if (mode.selectedSloop) {
+        instruction = 'Click an adjacent hex to move the sloop there';
+      } else {
+        const moveCount = mode.sloopMoves.length;
+        instruction = moveCount > 0
+          ? `SINK: ${moveCount} sloop move${moveCount > 1 ? 's' : ''} queued — click another sloop or proceed`
+          : 'SINK: Click a sloop to pre-move it (1 dbl each), or skip to select target';
+      }
+      break;
+    }
     case 'sink_confirm': instruction = 'Choose which ship to sink'; break;
     case 'pirate': instruction = 'Claim charts or click Done'; break;
     case 'idle':
@@ -467,34 +562,56 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       )}
 
       {/* Sail controls */}
-      {isSailActive && (
-        <div className="hud-panel sail-hud" style={{
-          position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
-        }}>
-          <span className="sail-hud__label">SAIL</span>
-          <span className="sail-hud__points">
-            {mode.type === 'sail' ? mode.pointsLeft : (mode.type === 'sail_dragging' ? mode.pointsLeft : 0)} pts
-          </span>
-          {mode.type === 'sail' && mode.queuedMoves.length > 0 && (
-            <span className="sail-hud__queued">
-              {mode.queuedMoves.length} move{mode.queuedMoves.length > 1 ? 's' : ''} queued
+      {isSailActive && (() => {
+        const sailBribes = mode.type === 'sail' ? mode.bribesUsed : (mode.type === 'sail_dragging' ? mode.bribesUsed : 0);
+        const canBuyMore = mode.type === 'sail' && (currentPlayer.doubloons - sailBribes) > 0;
+        return (
+          <div className="hud-panel sail-hud" style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          }}>
+            <span className="sail-hud__label">SAIL</span>
+            <span className="sail-hud__points">
+              {mode.type === 'sail' ? mode.pointsLeft : (mode.type === 'sail_dragging' ? mode.pointsLeft : 0)} pts
             </span>
-          )}
-          {sailHasQueuedMoves && (
-            <button className="hud-btn hud-btn--confirm" onClick={handleSailDone}
-              style={{ padding: '6px 16px', fontSize: '0.78rem', fontWeight: 600 }}>
-              Done
+            {sailBribes > 0 && (
+              <span style={{ fontSize: '0.72rem', color: '#8b6914' }}>
+                ({sailBribes} dbl)
+              </span>
+            )}
+            {mode.type === 'sail' && mode.queuedMoves.length > 0 && (
+              <span className="sail-hud__queued">
+                {mode.queuedMoves.length} move{mode.queuedMoves.length > 1 ? 's' : ''} queued
+              </span>
+            )}
+            {mode.type === 'sail' && (
+              <button className="hud-btn" onClick={handleSailBuyPoint}
+                disabled={!canBuyMore}
+                style={{
+                  padding: '6px 12px', fontSize: '0.72rem', fontWeight: 600,
+                  background: canBuyMore ? 'rgba(184,150,62,0.3)' : 'rgba(139,115,85,0.15)',
+                  color: canBuyMore ? '#8b6914' : '#a89060',
+                  border: canBuyMore ? '1px solid #a89060' : '1px solid #c4b28a',
+                  cursor: canBuyMore ? 'pointer' : 'default',
+                }}>
+                +1 pt (1 dbl)
+              </button>
+            )}
+            {sailHasQueuedMoves && (
+              <button className="hud-btn hud-btn--confirm" onClick={handleSailDone}
+                style={{ padding: '6px 16px', fontSize: '0.78rem', fontWeight: 600 }}>
+                Done
+              </button>
+            )}
+            <button className="hud-btn hud-btn--danger" onClick={handleCancel}
+              style={{ padding: '6px 14px', fontSize: '0.75rem' }}>
+              Cancel
             </button>
-          )}
-          <button className="hud-btn hud-btn--danger" onClick={handleCancel}
-            style={{ padding: '6px 14px', fontSize: '0.75rem' }}>
-            Cancel
-          </button>
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {/* Cancel for non-sail actions */}
-      {(mode.type === 'build_select_hex' || mode.type === 'steal_select_hex' || mode.type === 'sink_select_hex' || mode.type === 'sink_premove') && (
+      {(mode.type === 'build_select_hex' || mode.type === 'steal_select_hex' || mode.type === 'sink_select_hex') && (
         <button className="hud-btn hud-btn--danger" onClick={handleCancel} style={{
           position: 'absolute', bottom: 90, left: '50%', transform: 'translateX(-50%)',
           padding: '6px 16px', fontSize: '0.75rem',
@@ -502,6 +619,39 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
           Cancel
         </button>
       )}
+
+      {/* Sink pre-move HUD */}
+      {mode.type === 'sink_premove' && (() => {
+        const isRelentless = currentPlayer.piratePower === PiratePower.THE_RELENTLESS;
+        const sloopMoveBribes = power ? power.modifySinkCost(mode.sloopMoves.length, { movingSloop: mode.sloopMoves.length > 0 }) : mode.sloopMoves.length;
+        const canAffordMore = sloopMoveBribes < currentPlayer.doubloons || (isRelentless && mode.sloopMoves.length === 0);
+        return (
+          <div className="hud-panel sail-hud" style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+          }}>
+            <span className="sail-hud__label">SINK — Pre-Move</span>
+            {mode.sloopMoves.length > 0 && (
+              <span style={{ fontSize: '0.75rem', color: '#8b6914' }}>
+                {mode.sloopMoves.length} move{mode.sloopMoves.length > 1 ? 's' : ''}
+                {sloopMoveBribes > 0 && ` (${sloopMoveBribes} dbl)`}
+                {isRelentless && mode.sloopMoves.length === 1 && ' (free!)'}
+              </span>
+            )}
+            {!canAffordMore && mode.sloopMoves.length > 0 && (
+              <span style={{ fontSize: '0.7rem', color: '#8b7960' }}>max reached</span>
+            )}
+            <button className="hud-btn hud-btn--confirm" onClick={() => {
+              setMode({ type: 'sink_select_hex', sloopMoves: mode.sloopMoves });
+            }} style={{ padding: '6px 16px', fontSize: '0.78rem', fontWeight: 600 }}>
+              {mode.sloopMoves.length > 0 ? 'Pick Target' : 'Skip'}
+            </button>
+            <button className="hud-btn hud-btn--danger" onClick={handleCancel}
+              style={{ padding: '6px 14px', fontSize: '0.75rem' }}>
+              Cancel
+            </button>
+          </div>
+        );
+      })()}
 
       {hoveredHex && (
         <div className="hex-info" style={{
@@ -629,23 +779,33 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
           const p = G.players.find(pl => pl.id === s.playerId)!;
           return { playerId: s.playerId, playerName: p.name, playerColor: p.color, shipType: s.type };
         });
+        // Reduce available doubloons by sloop pre-move cost
+        const sloopMoveCost = power && mode.sloopMoves.length > 0
+          ? power.modifySinkCost(mode.sloopMoves.length, { movingSloop: true })
+          : mode.sloopMoves.length;
+        const remainingDoubloons = currentPlayer.doubloons - sloopMoveCost;
         return (
           <SinkDialog
             hex={mode.hex}
             targets={targets}
             isRelentless={currentPlayer.piratePower === PiratePower.THE_RELENTLESS}
-            doubloons={currentPlayer.doubloons}
-            onConfirm={(targetPlayerId, targetShipType) => {
+            doubloons={remainingDoubloons}
+            onConfirm={(primaryIdx, additionalIndices) => {
+              const primary = targets[primaryIdx];
+              const additional = additionalIndices.map(i => ({
+                shipType: targets[i].shipType,
+                playerId: targets[i].playerId,
+              }));
               moves.sink({
                 hex: mode.hex,
-                targetShipType,
-                targetPlayerId,
+                targetShipType: primary.shipType,
+                targetPlayerId: primary.playerId,
                 sloopMovesBefore: mode.sloopMoves,
-                additionalSinks: [],
+                additionalSinks: additional,
               });
               setMode({ type: 'idle' }); setSelectedAction(null);
             }}
-            onCancel={() => { setMode({ type: 'sink_select_hex' }); }}
+            onCancel={() => { setMode({ type: 'sink_select_hex', sloopMoves: mode.sloopMoves }); }}
           />
         );
       })()}
@@ -655,8 +815,9 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         <ChartDialog
           drawnCharts={mode.drawnCharts}
           keepCount={mode.keepCount}
-          onConfirm={(selectedIds) => {
-            moves.chart({ bribeChoices: [], selectedChartIds: selectedIds });
+          maxDoubloons={mode.maxDoubloons}
+          onConfirm={(selectedIds, bribeChoices) => {
+            moves.chart({ bribeChoices, selectedChartIds: selectedIds });
             setMode({ type: 'idle' });
             setSelectedAction(null);
           }}

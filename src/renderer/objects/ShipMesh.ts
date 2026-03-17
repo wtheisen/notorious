@@ -36,7 +36,7 @@ export class ShipMesh {
     const geo = new THREE.ConeGeometry(0.12, 0.3, 4);
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = 0.2;
+    mesh.position.y = 0.1;
     mesh.castShadow = true;
     this.mesh.add(mesh);
   }
@@ -46,15 +46,15 @@ export class ShipMesh {
     const geo = new THREE.BoxGeometry(0.2, 0.25, 0.35);
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = 0.22;
+    mesh.position.y = 0.12;
     mesh.castShadow = true;
     this.mesh.add(mesh);
 
     // Mast
     const mastGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.3);
-    const mastMat = new THREE.MeshStandardMaterial({ color: 0x886644 });
+    const mastMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
     const mast = new THREE.Mesh(mastGeo, mastMat);
-    mast.position.y = 0.45;
+    mast.position.y = 0.35;
     this.mesh.add(mast);
   }
 
@@ -63,7 +63,7 @@ export class ShipMesh {
     const geo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 8);
     const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
     const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.y = 0.12;
+    mesh.position.y = 0.05;
     mesh.castShadow = true;
     this.mesh.add(mesh);
 
@@ -71,13 +71,13 @@ export class ShipMesh {
     const flagGeo = new THREE.BoxGeometry(0.15, 0.1, 0.02);
     const flagMat = new THREE.MeshStandardMaterial({ color });
     const flag = new THREE.Mesh(flagGeo, flagMat);
-    flag.position.set(0.05, 0.35, 0);
+    flag.position.set(0.05, 0.25, 0);
     this.mesh.add(flag);
 
     const poleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.3);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x886644 });
+    const poleMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
     const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 0.27;
+    pole.position.y = 0.17;
     this.mesh.add(pole);
   }
 

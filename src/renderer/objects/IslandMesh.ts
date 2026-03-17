@@ -23,7 +23,7 @@ export class IslandMesh {
     this.mesh = new THREE.Group();
 
     const pos = hexToWorld(island.hexCoord);
-    this.mesh.position.set(pos.x, 0.08, pos.z);
+    this.mesh.position.set(pos.x, 0.01, pos.z);
 
     for (const edge of island.impassableEdges) {
       const islet = this.createIslet(edge);
@@ -31,7 +31,7 @@ export class IslandMesh {
     }
 
     const label = this.createLabel(island.name);
-    label.position.y = 0.6;
+    label.position.y = 0.15;
     this.mesh.add(label);
 
     this.mesh.userData = { type: 'island', name: island.name };
@@ -54,8 +54,8 @@ export class IslandMesh {
     // Rounded capsule-like island using a sphere scaled into an elongated pill
     const islandGeo = new THREE.SphereGeometry(HEX_3D_SIZE * 0.38, 12, 8);
     const islandMat = new THREE.MeshStandardMaterial({
-      color: 0x3a8a4a,
-      roughness: 0.8,
+      color: 0x4a7a4a,
+      roughness: 0.85,
     });
     const islandBody = new THREE.Mesh(islandGeo, islandMat);
     // Scale into a long thin pill: stretch along edge tangent, flatten vertically
@@ -69,7 +69,7 @@ export class IslandMesh {
     // Small vegetation bumps on top
     const bumpGeo = new THREE.SphereGeometry(0.05, 6, 4);
     const bumpMat = new THREE.MeshStandardMaterial({
-      color: 0x2a7a3a,
+      color: 0x3a6a3a,
     });
     const tx = -nz;
     const tz = nx;
@@ -88,11 +88,8 @@ export class IslandMesh {
     canvas.width = 256;
     canvas.height = 64;
     const ctx = canvas.getContext('2d')!;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    ctx.roundRect(4, 4, 248, 56, 8);
-    ctx.fill();
-    ctx.font = 'bold 28px sans-serif';
-    ctx.fillStyle = '#ffffff';
+    ctx.font = 'italic 24px serif';
+    ctx.fillStyle = '#3b2a1a';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 128, 32);
@@ -100,7 +97,7 @@ export class IslandMesh {
     const texture = new THREE.CanvasTexture(canvas);
     const mat = new THREE.SpriteMaterial({ map: texture, transparent: true });
     const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(1.2, 0.3, 1);
+    sprite.scale.set(1.35, 0.33, 1);
     return sprite;
   }
 }

@@ -27,7 +27,7 @@ export class EdgeMarker {
     this.mesh.position.set(center.x, 0, center.z);
 
     const wallMat = new THREE.MeshStandardMaterial({
-      color: 0x553322,
+      color: 0x6b4422,
       roughness: 0.8,
     });
 
@@ -45,7 +45,7 @@ export class EdgeMarker {
       const innerRadius = HEX_3D_SIZE * Math.sqrt(3) / 2 * 0.97; // match hex gap
       wall.position.set(
         nx * innerRadius,
-        0.15,
+        0.05,
         nz * innerRadius
       );
 

@@ -32,17 +32,17 @@ export class SceneManager {
 
     // Scene
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x0a1628);
-    this.scene.fog = new THREE.Fog(0x0a1628, 15, 25);
+    this.scene.background = new THREE.Color(0xc4b28a);
+    this.scene.fog = new THREE.Fog(0xc4b28a, 15, 25);
 
     // Camera
     this.cameraController = new CameraController(canvas);
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0x6688aa, 0.6);
+    // Lights — warm golden tones for aged map feel
+    const ambientLight = new THREE.AmbientLight(0xccaa77, 0.7);
     this.scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffeedd, 1.2);
+    const sunLight = new THREE.DirectionalLight(0xffe8c0, 1.1);
     sunLight.position.set(5, 10, 3);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.set(1024, 1024);
@@ -54,7 +54,7 @@ export class SceneManager {
     sunLight.shadow.camera.bottom = -8;
     this.scene.add(sunLight);
 
-    const fillLight = new THREE.DirectionalLight(0x4488cc, 0.3);
+    const fillLight = new THREE.DirectionalLight(0x998866, 0.3);
     fillLight.position.set(-3, 5, -5);
     this.scene.add(fillLight);
 

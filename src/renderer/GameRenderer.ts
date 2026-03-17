@@ -105,7 +105,7 @@ export class GameRenderer {
     const offsetDist = count > 1 ? 0.25 : 0;
     shipMesh.setPosition(
       worldPos.x + Math.cos(offsetAngle) * offsetDist,
-      0.08,
+      0.01,
       worldPos.z + Math.sin(offsetAngle) * offsetDist
     );
 
@@ -153,7 +153,7 @@ export class GameRenderer {
         const offsetDist = hexState.ships.length > 1 ? 0.25 : 0;
         shipMesh.setPosition(
           worldPos.x + Math.cos(offsetAngle) * offsetDist,
-          0.08,
+          0.01,
           worldPos.z + Math.sin(offsetAngle) * offsetDist
         );
 
@@ -244,7 +244,7 @@ export class GameRenderer {
 
   /** Move a ship mesh to a world position (for drag feedback) */
   moveShipTo(ship: ShipMesh, x: number, z: number) {
-    ship.mesh.position.set(x, 0.3, z); // lift slightly during drag
+    ship.mesh.position.set(x, 0.2, z); // lift slightly during drag
   }
 
   /** Snap a ship mesh back to its hex position */
@@ -258,7 +258,7 @@ export class GameRenderer {
     const offsetDist = count > 1 ? 0.25 : 0;
     ship.setPosition(
       worldPos.x + Math.cos(offsetAngle) * offsetDist,
-      0.08,
+      0.01,
       worldPos.z + Math.sin(offsetAngle) * offsetDist
     );
   }

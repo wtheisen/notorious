@@ -5,11 +5,11 @@ import { createHexGeometry, createHexShape, hexToWorld, HEX_3D_SIZE } from '../h
 export type HexHighlight = 'none' | 'hover' | 'selected' | 'valid' | 'island';
 
 const COLORS: Record<HexHighlight, number> = {
-  none: 0x1a4a6b,
-  hover: 0x3080aa,
-  selected: 0xf0c040,
-  valid: 0x40a0f0,
-  island: 0x8b6b3a,
+  none: 0x6a8a9a,
+  hover: 0x8aa0aa,
+  selected: 0xd4a843,
+  valid: 0x7a9aaa,
+  island: 0x8b7355,
 };
 
 const sharedGeometry = createHexGeometry();
@@ -40,8 +40,8 @@ export class HexTile {
     this.coord = coord;
     const material = new THREE.MeshStandardMaterial({
       color: COLORS.none,
-      roughness: 0.7,
-      metalness: 0.1,
+      roughness: 0.9,
+      metalness: 0.0,
     });
     this.mesh = new THREE.Mesh(sharedGeometry, material);
     this.mesh.rotation.x = -Math.PI / 2;
@@ -60,7 +60,7 @@ export class HexTile {
     });
     this.controlRing = new THREE.Mesh(sharedRingGeo, ringMat);
     this.controlRing.rotation.x = -Math.PI / 2;
-    this.controlRing.position.set(pos.x, 0.16, pos.z);
+    this.controlRing.position.set(pos.x, 0.03, pos.z);
     this.controlRing.visible = false;
 
     // Gold hover/target ring
@@ -75,7 +75,7 @@ export class HexTile {
     });
     this.hoverRing = new THREE.Mesh(sharedRingGeo, hoverRingMat);
     this.hoverRing.rotation.x = -Math.PI / 2;
-    this.hoverRing.position.set(pos.x, 0.17, pos.z);
+    this.hoverRing.position.set(pos.x, 0.04, pos.z);
     this.hoverRing.visible = false;
   }
 

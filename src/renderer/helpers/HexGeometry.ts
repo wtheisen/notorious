@@ -47,7 +47,7 @@ export function createHexShape(size: number = HEX_3D_SIZE): THREE.Shape {
 /**
  * Create extruded hex geometry (thin prism for tiles).
  */
-export function createHexGeometry(size: number = HEX_3D_SIZE, depth: number = 0.15): THREE.ExtrudeGeometry {
+export function createHexGeometry(size: number = HEX_3D_SIZE, depth: number = 0.02): THREE.ExtrudeGeometry {
   const shape = createHexShape(size * 0.97); // slight gap between hexes
   return new THREE.ExtrudeGeometry(shape, {
     depth,

@@ -23,14 +23,14 @@ const waterFragmentShader = `
   varying float vWave;
 
   void main() {
-    vec3 deepColor = vec3(0.02, 0.08, 0.18);
-    vec3 shallowColor = vec3(0.05, 0.15, 0.35);
+    vec3 deepColor = vec3(0.25, 0.36, 0.42);
+    vec3 shallowColor = vec3(0.33, 0.45, 0.50);
     float mix_factor = smoothstep(-0.03, 0.03, vWave);
     vec3 color = mix(deepColor, shallowColor, mix_factor);
 
-    // Foam-like highlights
+    // Foam-like highlights — warm parchment tint
     float foam = smoothstep(0.02, 0.035, vWave);
-    color += vec3(0.15, 0.2, 0.25) * foam;
+    color += vec3(0.15, 0.14, 0.10) * foam;
 
     gl_FragColor = vec4(color, 0.92);
   }

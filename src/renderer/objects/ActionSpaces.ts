@@ -39,12 +39,12 @@ class ActionSpace {
     this.mesh = new THREE.Group();
     this.mesh.position.set(x, 0, z);
 
-    // Platform - rounded square
-    const platGeo = new THREE.CylinderGeometry(0.45, 0.5, 0.1, 6);
+    // Platform - hex shaped, 33% larger
+    const platGeo = new THREE.CylinderGeometry(0.60, 0.67, 0.1, 6);
     const platMat = new THREE.MeshStandardMaterial({
-      color: 0x1a2a3a,
-      roughness: 0.6,
-      metalness: 0.2,
+      color: 0x8b7355,
+      roughness: 0.75,
+      metalness: 0.1,
     });
     this.platform = new THREE.Mesh(platGeo, platMat);
     this.platform.position.y = 0.05;
@@ -53,8 +53,8 @@ class ActionSpace {
     this.mesh.add(this.platform);
 
     // Border ring - rotate to match platform hex orientation
-    const ringGeo = new THREE.TorusGeometry(0.48, 0.025, 8, 6);
-    const ringMat = new THREE.MeshStandardMaterial({ color: 0x445566, roughness: 0.5, emissive: 0x000000 });
+    const ringGeo = new THREE.TorusGeometry(0.64, 0.025, 8, 6);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0x5c3a1e, roughness: 0.5, emissive: 0x000000 });
     this.ring = new THREE.Mesh(ringGeo, ringMat);
     this.ring.rotation.x = -Math.PI / 2;
     this.ring.rotation.z = Math.PI / 6;
@@ -63,7 +63,7 @@ class ActionSpace {
 
     // Label
     this.label = this.createLabel(ACTION_ICONS[action]);
-    this.label.position.y = 0.45;
+    this.label.position.y = 0.15;
     this.mesh.add(this.label);
 
     // Meeple container
@@ -95,13 +95,13 @@ class ActionSpace {
 
   setHighlight(on: boolean) {
     const mat = this.platform.material as THREE.MeshStandardMaterial;
-    mat.emissive.setHex(on ? 0x112233 : 0x000000);
+    mat.emissive.setHex(on ? 0x1a1508 : 0x000000);
   }
 
   setHover(on: boolean) {
     const ringMat = this.ring.material as THREE.MeshStandardMaterial;
-    ringMat.emissive.setHex(on ? 0x88aacc : 0x000000);
-    ringMat.color.setHex(on ? 0x88ccff : 0x445566);
+    ringMat.emissive.setHex(on ? 0x332a10 : 0x000000);
+    ringMat.color.setHex(on ? 0xb8963e : 0x5c3a1e);
     this.ring.scale.setScalar(on ? 1.05 : 1);
   }
 
@@ -111,7 +111,7 @@ class ActionSpace {
     canvas.height = 40;
     const ctx = canvas.getContext('2d')!;
     ctx.font = 'bold 22px serif';
-    ctx.fillStyle = '#c4a843';
+    ctx.fillStyle = '#f4e8c1';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, 64, 20);
