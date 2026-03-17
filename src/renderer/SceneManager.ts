@@ -86,6 +86,7 @@ export class SceneManager {
 
       this.cameraController.update();
       this.water.update(elapsed);
+      this.hexGrid.getWrapGlow().update(elapsed);
 
       for (const cb of this.onFrameCallbacks) {
         cb(dt);

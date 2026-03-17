@@ -2,10 +2,12 @@ import * as THREE from 'three';
 import { BOARD_HEXES } from '../../config/HexConstants';
 import { hexToKey } from '../../types/CoordinateTypes';
 import { HexTile, HexHighlight } from './HexTile';
+import { WrapGlow } from './WrapGlow';
 
 export class HexGrid {
   readonly group: THREE.Group;
   private tiles: Map<string, HexTile> = new Map();
+  private wrapGlow: WrapGlow;
 
   constructor() {
     this.group = new THREE.Group();
@@ -16,6 +18,13 @@ export class HexGrid {
       this.group.add(tile.getRing());
       this.group.add(tile.getHoverRing());
     }
+
+    this.wrapGlow = new WrapGlow();
+    this.group.add(this.wrapGlow.group);
+  }
+
+  getWrapGlow(): WrapGlow {
+    return this.wrapGlow;
   }
 
   getTile(key: string): HexTile | undefined {
