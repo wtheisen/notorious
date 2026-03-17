@@ -98,9 +98,14 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
     return moves;
   }
 
-  // PIRATE PHASE: Claim charts or pass
+  // PIRATE PHASE: Claim charts, set wind token, or pass
   if (ctx.phase === 'pirate') {
-    // Check if player can claim any charts
+    // If this AI holds the wind token, set it (keep direction, advance position by 1)
+    if (G.windToken.holder === ctx.currentPlayer) {
+      const newPos = (G.windToken.position + 1) % ctx.numPlayers;
+      moves.push({ move: 'setWindToken', args: [{ flip: false, newPosition: newPos }] });
+    }
+
     // For simplicity, just pass for now
     moves.push({ move: 'doneClaiming', args: [] });
     return moves;

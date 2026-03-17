@@ -4,6 +4,20 @@ import { AnyChart } from '../../core/Chart';
 import { Island } from '../../core/Island';
 
 /**
+ * Wind token state — determines turn order for PLACE and PLAY phases.
+ * The token sits "between" two players. placeDirection determines PLACE order;
+ * PLAY always uses the opposite direction.
+ */
+export interface WindTokenState {
+  /** 0-3: token sits between player[position] and player[(position+1)%4] */
+  position: number;
+  /** Which direction the PLACE arrow points */
+  placeDirection: WindDirection;
+  /** Player who claimed the wind token this round (via CHART action) */
+  holder: string | null;
+}
+
+/**
  * Ship representation for boardgame.io state
  * Plain object instead of class
  */
@@ -75,8 +89,7 @@ export interface NotoriousState {
   players: PlayerState[];
   board: BoardState;
   chartDeck: ChartDeckState;
-  windDirection: WindDirection;
-  windTokenHolder: string | null;
+  windToken: WindTokenState;
 
   // Setup phase tracking
   setupComplete: boolean[];  // Track which players have completed both placements

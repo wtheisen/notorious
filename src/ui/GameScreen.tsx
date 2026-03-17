@@ -4,10 +4,10 @@ import * as THREE from 'three';
 import { SceneManager } from '../renderer/SceneManager';
 import { GameRenderer } from '../renderer/GameRenderer';
 import { hexToWorld } from '../renderer/helpers/HexGeometry';
-import type { NotoriousState } from '../game/types/GameState';
+import type { NotoriousState, WindTokenState } from '../game/types/GameState';
 import { hexToKey, HexCoord, hexEquals } from '../types/CoordinateTypes';
 import { getValidNeighbors } from '../config/HexConstants';
-import { ActionType, ShipType } from '../types/GameTypes';
+import { ActionType, ShipType, WindDirection } from '../types/GameTypes';
 import { getPowerStrategy } from '../core/powers';
 import { getReachableHexes, SailCheckFn } from '../game/logic/SailLogic';
 import { canSailBetween } from '../game/logic/BoardLogic';
@@ -45,7 +45,8 @@ type InteractionMode =
   | { type: 'sink_premove'; sloopMoves: { from: HexCoord; to: HexCoord }[]; selectedSloop: HexCoord | null; validDests: string[] }
   | { type: 'sink_confirm'; hex: HexCoord; sloopMoves: { from: HexCoord; to: HexCoord }[] }
   | { type: 'chart_pick'; drawnCharts: AnyChart[]; keepCount: number; maxDoubloons: number }
-  | { type: 'pirate' };
+  | { type: 'pirate' }
+  | { type: 'wind_token_decision' };
 
 export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -59,6 +60,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   const dragShipRef = useRef<any>(null);
   const lastShipHoverKey = useRef<string | null>(null);
 
+  const [windTokenPos, setWindTokenPos] = useState(0);
+  const [windTokenFlip, setWindTokenFlip] = useState(false);
   const currentPlayer = G.players[parseInt(ctx.currentPlayer)];
   const phase = ctx.phase ?? 'setup';
   const sailMaxDist = currentPlayer
@@ -524,6 +527,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     }
     case 'sink_confirm': instruction = 'Choose which ship to sink'; break;
     case 'pirate': instruction = 'Claim charts or click Done'; break;
+    case 'wind_token_decision': instruction = 'You hold the Wind Token — choose position and direction'; break;
     case 'idle':
       if (phase === 'play' && currentPlayer.placedCaptains.length > 0)
         instruction = 'Choose an action, or drag a ship to sail';
@@ -537,7 +541,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     <div style={{ width: '100%', height: '100%', position: 'relative' }}>
       <canvas ref={canvasRef} style={{ width: '100%', height: '100%', display: 'block' }} />
 
-      <PhaseIndicator phase={phase} currentPlayer={currentPlayer} windDirection={G.windDirection} instruction={instruction} />
+      <PhaseIndicator phase={phase} currentPlayer={currentPlayer} windToken={G.windToken} players={G.players} instruction={instruction} />
 
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {G.players.map(p => <PlayerPanel key={p.id} player={p} isActive={ctx.currentPlayer === p.id} />)}
@@ -672,7 +676,16 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span className="pirate-panel__title">Pirate Phase</span>
-            <button className="hud-btn hud-btn--confirm" onClick={() => moves.doneClaiming()}
+            <button className="hud-btn hud-btn--confirm" onClick={() => {
+              // If current player holds the wind token, show decision UI first
+              if (G.windToken.holder === ctx.currentPlayer && !currentPlayer.isAI) {
+                setWindTokenPos(G.windToken.position);
+                setWindTokenFlip(false);
+                setMode({ type: 'wind_token_decision' });
+              } else {
+                moves.doneClaiming();
+              }
+            }}
               style={{ padding: '6px 18px', fontSize: '0.78rem', fontWeight: 600 }}>
               Done
             </button>
@@ -720,6 +733,56 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
           )}
         </div>
       )}
+
+      {/* Wind token decision UI */}
+      {mode.type === 'wind_token_decision' && (() => {
+        const currentDir = windTokenFlip
+          ? (G.windToken.placeDirection === WindDirection.CLOCKWISE ? WindDirection.COUNTERCLOCKWISE : WindDirection.CLOCKWISE)
+          : G.windToken.placeDirection;
+        return (
+          <div className="hud-panel" style={{
+            position: 'absolute', bottom: 16, left: '50%', transform: 'translateX(-50%)',
+            padding: '14px 20px', minWidth: 320,
+          }}>
+            <div style={{ fontFamily: 'Cinzel, serif', fontSize: '0.85rem', fontWeight: 600, marginBottom: 10, color: '#3b2a1a' }}>
+              Wind Token
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: '0.75rem', color: '#5c3a1e' }}>Position:</span>
+              {G.players.map((_, i) => (
+                <button key={i} className="hud-btn" onClick={() => setWindTokenPos(i)}
+                  style={{
+                    padding: '4px 10px', fontSize: '0.72rem',
+                    background: windTokenPos === i ? 'rgba(184,150,62,0.4)' : 'rgba(139,115,85,0.1)',
+                    border: windTokenPos === i ? '2px solid #b8963e' : '1px solid #8b7355',
+                    color: '#3b2a1a',
+                  }}>
+                  {i}–{(i + 1) % G.players.length}
+                </button>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12 }}>
+              <span style={{ fontSize: '0.75rem', color: '#5c3a1e' }}>Direction:</span>
+              <button className="hud-btn" onClick={() => setWindTokenFlip(!windTokenFlip)}
+                style={{
+                  padding: '4px 14px', fontSize: '0.78rem',
+                  background: 'rgba(139,115,85,0.15)', border: '1px solid #8b7355', color: '#3b2a1a',
+                }}>
+                {currentDir === WindDirection.CLOCKWISE ? '↻ CW' : '↺ CCW'} (click to flip)
+              </button>
+            </div>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="hud-btn hud-btn--confirm" onClick={() => {
+                moves.setWindToken({ flip: windTokenFlip, newPosition: windTokenPos });
+                moves.doneClaiming();
+                setMode({ type: 'idle' });
+              }} style={{ padding: '6px 18px', fontSize: '0.78rem', fontWeight: 600 }}>
+                Confirm
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Player's chart hand */}
       <ChartHand charts={currentPlayer.charts} />

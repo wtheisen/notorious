@@ -1,6 +1,6 @@
 import { Game, Ctx } from 'boardgame.io';
 import { INVALID_MOVE } from 'boardgame.io/core';
-import { NotoriousState, PlayerState, BoardState, hexToKey, Ship } from './types/GameState';
+import { NotoriousState, PlayerState, BoardState, hexToKey, Ship, WindTokenState } from './types/GameState';
 import { PlayerColor, ActionType, WindDirection, GAME_CONSTANTS, ShipType, PiratePower } from '../types/GameTypes';
 import { getPowerStrategy } from '../core/powers';
 import { HexCoord, hexEquals } from '../types/CoordinateTypes';
@@ -93,6 +93,52 @@ interface ChartMoveData {
 /** CLAIM CHART move data (used during Pirate phase) */
 interface ClaimChartData {
   chartId: string;
+}
+
+/** SET WIND TOKEN move data (used during Pirate phase by wind token holder) */
+interface SetWindTokenData {
+  flip: boolean;            // Reverse the placeDirection
+  newPosition: number;      // 0-3: which gap to place the token
+}
+
+// ============================================
+// Wind Token Helpers
+// ============================================
+
+/** Get the opposite wind direction */
+function oppositeDirection(dir: WindDirection): WindDirection {
+  return dir === WindDirection.CLOCKWISE ? WindDirection.COUNTERCLOCKWISE : WindDirection.CLOCKWISE;
+}
+
+/** Get the next player index in a given direction */
+function getNextInDirection(pos: number, direction: WindDirection, numPlayers: number): number {
+  if (direction === WindDirection.CLOCKWISE) return (pos + 1) % numPlayers;
+  return (pos - 1 + numPlayers) % numPlayers;
+}
+
+/**
+ * Derive the first player for a phase from the wind token state.
+ * For PLACE: the player the PLACE arrow points at.
+ * - CLOCKWISE arrow at position P → first placer is player (P+1) % n
+ * - COUNTERCLOCKWISE arrow at position P → first placer is player P
+ */
+function getFirstPlayerForPlace(windToken: WindTokenState, numPlayers: number): number {
+  if (windToken.placeDirection === WindDirection.CLOCKWISE) {
+    return (windToken.position + 1) % numPlayers;
+  }
+  return windToken.position;
+}
+
+/**
+ * Derive the first player for PLAY phase (opposite of PLACE).
+ * The last placer goes first in PLAY, which is the first player in opposite direction.
+ */
+function getFirstPlayerForPlay(windToken: WindTokenState, numPlayers: number): number {
+  const playDirection = oppositeDirection(windToken.placeDirection);
+  if (playDirection === WindDirection.CLOCKWISE) {
+    return (windToken.position + 1) % numPlayers;
+  }
+  return windToken.position;
 }
 
 /**
@@ -194,8 +240,11 @@ export const NotoriousGame: Game<NotoriousState> = {
       players,
       board,
       chartDeck,
-      windDirection: WindDirection.CLOCKWISE,
-      windTokenHolder: null,
+      windToken: {
+        position: 0,
+        placeDirection: WindDirection.CLOCKWISE,
+        holder: null,
+      },
       setupComplete: new Array(ctx.numPlayers).fill(false),
       setupPlacements: new Array(ctx.numPlayers).fill(0),
       setupRound: 0,
@@ -332,18 +381,14 @@ export const NotoriousGame: Game<NotoriousState> = {
 
       turn: {
         order: {
-          first: () => 0,
+          first: ({ G, ctx }) => getFirstPlayerForPlace(G.windToken, ctx.numPlayers),
           next: ({ G, ctx }) => {
-            // Round-robin: find next player who still has captains to place
+            // Round-robin in PLACE direction: find next player who still has captains
             const numPlayers = ctx.numPlayers;
             let nextPos = ctx.playOrderPos;
 
             for (let i = 0; i < numPlayers; i++) {
-              if (G.windDirection === WindDirection.CLOCKWISE) {
-                nextPos = (nextPos + 1) % numPlayers;
-              } else {
-                nextPos = (nextPos - 1 + numPlayers) % numPlayers;
-              }
+              nextPos = getNextInDirection(nextPos, G.windToken.placeDirection, numPlayers);
 
               const nextPlayer = G.players[nextPos];
               if (nextPlayer.placedCaptains.length < nextPlayer.captainCount) {
@@ -391,26 +436,28 @@ export const NotoriousGame: Game<NotoriousState> = {
 
       turn: {
         order: {
-          first: ({ G }) => {
-            // Find first player with captains to execute
-            for (let i = 0; i < G.players.length; i++) {
-              if (G.players[i].placedCaptains.length > 0) {
-                return i;
+          first: ({ G, ctx }) => {
+            // PLAY uses opposite direction of PLACE
+            const playDirection = oppositeDirection(G.windToken.placeDirection);
+            const startPlayer = getFirstPlayerForPlay(G.windToken, ctx.numPlayers);
+            // Find first player with captains starting from the play-order first player
+            let pos = startPlayer;
+            for (let i = 0; i < ctx.numPlayers; i++) {
+              if (G.players[pos].placedCaptains.length > 0) {
+                return pos;
               }
+              pos = getNextInDirection(pos, playDirection, ctx.numPlayers);
             }
             return 0;
           },
           next: ({ G, ctx }) => {
-            // Find next player with captains to execute
+            // PLAY uses opposite direction of PLACE
+            const playDirection = oppositeDirection(G.windToken.placeDirection);
             const numPlayers = ctx.numPlayers;
             let nextPos = ctx.playOrderPos;
 
             for (let i = 0; i < numPlayers; i++) {
-              if (G.windDirection === WindDirection.CLOCKWISE) {
-                nextPos = (nextPos + 1) % numPlayers;
-              } else {
-                nextPos = (nextPos - 1 + numPlayers) % numPlayers;
-              }
+              nextPos = getNextInDirection(nextPos, playDirection, numPlayers);
 
               const nextPlayer = G.players[nextPos];
               if (nextPlayer.placedCaptains.length > 0) {
@@ -961,7 +1008,7 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
 
             // Give the Wind token
-            G.windTokenHolder = ctx.currentPlayer;
+            G.windToken.holder = ctx.currentPlayer;
 
             console.log(`[CHART] Drew ${drawCount}, kept ${keepCount}. Player now holds Wind token`);
 
@@ -992,7 +1039,7 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
 
             // Give the Wind token
-            G.windTokenHolder = ctx.currentPlayer;
+            G.windToken.holder = ctx.currentPlayer;
 
             console.log(`[CHART] Drew ${actualDrawCount}, kept ${actualKeepCount}. Player now holds Wind token`);
 
@@ -1090,18 +1137,38 @@ export const NotoriousGame: Game<NotoriousState> = {
 
       turn: {
         order: {
-          first: () => 0,
+          first: ({ G, ctx }) => getFirstPlayerForPlace(G.windToken, ctx.numPlayers),
           next: ({ G, ctx }) => {
-            if (G.windDirection === WindDirection.CLOCKWISE) {
-              return (ctx.playOrderPos + 1) % ctx.numPlayers;
-            } else {
-              return (ctx.playOrderPos - 1 + ctx.numPlayers) % ctx.numPlayers;
-            }
+            return getNextInDirection(ctx.playOrderPos, G.windToken.placeDirection, ctx.numPlayers);
           }
         }
       },
 
       moves: {
+        /**
+         * Set wind token position and/or flip direction.
+         * Only callable by the wind token holder during PIRATE phase.
+         */
+        setWindToken: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, data: SetWindTokenData) => {
+          if (G.windToken.holder !== ctx.currentPlayer) {
+            console.log('[WIND] Not the wind token holder');
+            return INVALID_MOVE;
+          }
+
+          // Validate position
+          if (data.newPosition < 0 || data.newPosition >= ctx.numPlayers) {
+            console.log('[WIND] Invalid token position');
+            return INVALID_MOVE;
+          }
+
+          if (data.flip) {
+            G.windToken.placeDirection = oppositeDirection(G.windToken.placeDirection);
+          }
+          G.windToken.position = data.newPosition;
+
+          console.log(`[WIND] Player ${parseInt(ctx.currentPlayer) + 1} set wind token: position=${data.newPosition}, flip=${data.flip}, direction=${G.windToken.placeDirection}`);
+        },
+
         /**
          * Claim a chart during Pirate phase
          * Player can claim charts from their hand or public Island Raids
@@ -1277,8 +1344,17 @@ export const NotoriousGame: Game<NotoriousState> = {
         return G.piratePhaseTurnsComplete >= ctx.numPlayers;
       },
 
-      // After all players have claimed, return to place phase
-      onEnd: ({ G }) => {
+      // After all players have claimed, advance wind token and return to PLACE phase
+      onEnd: ({ G, ctx }) => {
+        // If no one claimed the wind token this round, advance position in place direction
+        if (!G.windToken.holder) {
+          G.windToken.position = getNextInDirection(
+            G.windToken.position, G.windToken.placeDirection, ctx.numPlayers
+          );
+          console.log(`[PIRATE] No wind holder — token advanced to position ${G.windToken.position}`);
+        }
+        // Reset holder for next round
+        G.windToken.holder = null;
         console.log('[PIRATE] Phase ending, returning to PLACE phase');
       },
 
