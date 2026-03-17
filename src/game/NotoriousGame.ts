@@ -33,13 +33,14 @@ import {
   getIslandByName,
   getHexController,
   findPathOnBoard,
-  getAllHexes
+  getAllHexes,
+  boardDistance
 } from './logic/BoardLogic';
 import { IslandPlacer } from '../core/IslandPlacer';
 import { ChartFactory, AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../core/Chart';
 import { ChartType } from '../types/GameTypes';
 import { BOARD_HEXES } from '../config/HexConstants';
-import { hexDistance } from '../utils/HexMath';
+// hexDistance import removed — use boardDistance from BoardLogic for wrap-aware distances
 
 // ============================================
 // Move Data Types
@@ -495,9 +496,10 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Calculate total movement points used
           // Each hex of movement costs 1 point
+          // Use boardDistance (BFS) instead of hexDistance so wrapping is handled
           let totalMovementPoints = 0;
           for (const move of moveData.moves) {
-            const distance = hexDistance(move.from, move.to);
+            const distance = boardDistance(move.from, move.to, maxDistance);
             totalMovementPoints += distance;
           }
 
@@ -541,12 +543,12 @@ export const NotoriousGame: Game<NotoriousState> = {
               return INVALID_MOVE;
             }
 
-            // Check path is valid
-            const distance = hexDistance(move.from, move.to);
+            // Check path is valid (boardDistance handles wrapping)
+            const distance = boardDistance(move.from, move.to, maxDistance);
             if (distance === 0) {
               console.log('[SAIL] Cannot sail to same hex');
               return INVALID_MOVE;
-            } else if (distance > maxDistance) {
+            } else if (distance > maxDistance || distance === Infinity) {
               console.log(`[SAIL] Move distance too far (max ${maxDistance} for ${player.piratePower})`);
               return INVALID_MOVE;
             } else if (distance === 1) {
@@ -559,7 +561,7 @@ export const NotoriousGame: Game<NotoriousState> = {
               const neighbors = getNeighbors(G.board, move.from);
               const validPath = neighbors.some(neighbor => {
                 if (!canSailForPlayer(move.from, neighbor.coord)) return false;
-                const remainingDistance = hexDistance(neighbor.coord, move.to);
+                const remainingDistance = boardDistance(neighbor.coord, move.to, maxDistance - 1);
                 if (remainingDistance === 0) return true;
                 if (remainingDistance === 1) return canSailForPlayer(neighbor.coord, move.to);
                 if (remainingDistance === 2 && distance === 3) {
@@ -567,7 +569,7 @@ export const NotoriousGame: Game<NotoriousState> = {
                   const secondNeighbors = getNeighbors(G.board, neighbor.coord);
                   return secondNeighbors.some(n2 => {
                     return canSailForPlayer(neighbor.coord, n2.coord) &&
-                      hexDistance(n2.coord, move.to) === 1 &&
+                      boardDistance(n2.coord, move.to, 1) === 1 &&
                       canSailForPlayer(n2.coord, move.to);
                   });
                 }

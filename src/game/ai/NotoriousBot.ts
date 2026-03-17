@@ -1,8 +1,10 @@
 import { MCTSBot, RandomBot } from 'boardgame.io/ai';
 import { NotoriousState, hexToKey } from '../types/GameState';
-import { ActionType, ShipType } from '../../types/GameTypes';
-import { HexCoord } from '../../types/CoordinateTypes';
-import { getPlayerShips, getHex } from '../logic/BoardLogic';
+import { ActionType, ShipType, ChartType, GAME_CONSTANTS } from '../../types/GameTypes';
+import { HexCoord, hexEquals } from '../../types/CoordinateTypes';
+import { getPlayerShips, getHex, getHexController, getIslandByName } from '../logic/BoardLogic';
+import { getValidNeighbors } from '../../config/HexConstants';
+import { TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
 
 /**
  * Enumerate all possible moves for the current game state
@@ -98,7 +100,7 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
     return moves;
   }
 
-  // PIRATE PHASE: Claim charts, set wind token, or pass
+  // PIRATE PHASE: Claim charts, set wind token, or done
   if (ctx.phase === 'pirate') {
     // If this AI holds the wind token, set it (keep direction, advance position by 1)
     if (G.windToken.holder === ctx.currentPlayer) {
@@ -106,7 +108,11 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
       moves.push({ move: 'setWindToken', args: [{ flip: false, newPosition: newPos }] });
     }
 
-    // For simplicity, just pass for now
+    // Try to claim charts from hand
+    const claimMoves = generateClaimMoves(G, ctx.currentPlayer, player);
+    moves.push(...claimMoves);
+
+    // Always include doneClaiming as a fallback
     moves.push({ move: 'doneClaiming', args: [] });
     return moves;
   }
@@ -126,11 +132,15 @@ function generateSailMoves(G: NotoriousState, playerId: string): any[] {
   );
 
   for (const sourceHex of playerHexes) {
-    const playerShips = sourceHex.ships.filter(s => s.playerId === playerId);
+    // Fix #2: Filter out PORT ships — they can't be sailed
+    const playerShips = sourceHex.ships.filter(
+      s => s.playerId === playerId && s.type !== ShipType.PORT
+    );
 
     for (const ship of playerShips) {
-      // Find adjacent hexes (within 2 distance for simple AI)
-      const neighbors = getNeighborHexes(G, sourceHex.coord);
+      // Fix #3: Use getValidNeighbors for wrap-aware neighbors
+      const neighbors = getValidNeighbors(sourceHex.coord)
+        .filter(c => G.board.hexes[hexToKey(c)] !== undefined);
 
       for (const destCoord of neighbors) {
         moves.push({
@@ -262,17 +272,55 @@ function generateSinkMoves(G: NotoriousState, playerId: string): any[] {
 }
 
 /**
- * Get neighboring hexes (simple distance-1 neighbors)
+ * Generate valid chart claim moves for the Pirate phase (Fix #1)
+ * Checks Treasure Maps, Smuggler Routes in hand, and public Island Raids
  */
-function getNeighborHexes(G: NotoriousState, coord: HexCoord): HexCoord[] {
-  const directions = [
-    { q: 1, r: 0 }, { q: 1, r: -1 }, { q: 0, r: -1 },
-    { q: -1, r: 0 }, { q: -1, r: 1 }, { q: 0, r: 1 }
-  ];
+function generateClaimMoves(G: NotoriousState, playerId: string, player: any): any[] {
+  const moves: any[] = [];
 
-  return directions
-    .map(d => ({ q: coord.q + d.q, r: coord.r + d.r, s: -(coord.q + d.q) - (coord.r + d.r) }))
-    .filter(c => G.board.hexes[hexToKey(c)] !== undefined);
+  // Check charts in hand
+  for (const chart of player.charts) {
+    switch (chart.type) {
+      case ChartType.TREASURE_MAP: {
+        const tm = chart as TreasureMapChart;
+        const playerShips = getPlayerShips(G.board, tm.targetHex, playerId);
+        const hasGalleon = playerShips.some(s => s.type === ShipType.GALLEON);
+        const controller = getHexController(G.board, tm.targetHex);
+        if (hasGalleon && controller === playerId) {
+          moves.push({ move: 'claimChart', args: [{ chartId: chart.id }] });
+        }
+        break;
+      }
+      case ChartType.SMUGGLER_ROUTE: {
+        const sr = chart as SmugglerRouteChart;
+        // Smuggler routes require ships on every hex of the path between two islands
+        // For AI simplicity, just try to claim — the game will validate
+        moves.push({ move: 'claimChart', args: [{ chartId: chart.id }] });
+        break;
+      }
+    }
+  }
+
+  // Check public Island Raids
+  const maxNotoriety = Math.max(...G.players.map(p => p.notoriety));
+  for (let i = 0; i < G.chartDeck.islandRaids.length; i++) {
+    const raid = G.chartDeck.islandRaids[i] as IslandRaidChart;
+    const threshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[i] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+    if (maxNotoriety < threshold) continue;
+
+    // Find the island hex
+    const island = getIslandByName(G.board, raid.targetIsland);
+    if (!island) continue;
+
+    const playerShips = getPlayerShips(G.board, island.hexCoord, playerId);
+    const hasGalleon = playerShips.some(s => s.type === ShipType.GALLEON);
+    const controller = getHexController(G.board, island.hexCoord);
+    if (hasGalleon && controller === playerId) {
+      moves.push({ move: 'claimChart', args: [{ chartId: raid.id }] });
+    }
+  }
+
+  return moves;
 }
 
 /**

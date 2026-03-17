@@ -6,6 +6,37 @@ import { areAdjacent, findPath, getDirection } from '../../utils/HexMath';
 import { GAME_CONSTANTS, ShipType } from '../../types/GameTypes';
 
 /**
+ * Compute shortest-path distance between two hexes on the board,
+ * accounting for edge wrapping. Uses BFS limited to maxDepth.
+ * Returns Infinity if no path exists within maxDepth.
+ */
+export function boardDistance(a: HexCoord, b: HexCoord, maxDepth: number = 3): number {
+  if (hexEquals(a, b)) return 0;
+
+  const visited = new Set<string>();
+  visited.add(`${a.q},${a.r}`);
+  let frontier: HexCoord[] = [a];
+  let depth = 0;
+
+  while (frontier.length > 0 && depth < maxDepth) {
+    depth++;
+    const nextFrontier: HexCoord[] = [];
+    for (const coord of frontier) {
+      for (const neighbor of getValidNeighbors(coord)) {
+        if (hexEquals(neighbor, b)) return depth;
+        const key = `${neighbor.q},${neighbor.r}`;
+        if (!visited.has(key)) {
+          visited.add(key);
+          nextFrontier.push(neighbor);
+        }
+      }
+    }
+    frontier = nextFrontier;
+  }
+  return Infinity;
+}
+
+/**
  * Get a hex at specific coordinates
  */
 export function getHex(board: BoardState, coord: HexCoord): HexState | null {
