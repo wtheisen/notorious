@@ -1,6 +1,6 @@
 import { BoardState, HexState, Ship, hexToKey } from '../types/GameState';
 import { HexCoord } from '../../types/CoordinateTypes';
-import { Island } from '../../core/Island';
+import { Island, canSailInDirection } from '../../core/Island';
 import { BOARD_HEXES, isOnBoard, getValidNeighbors } from '../../config/HexConstants';
 import { areAdjacent, findPath, getDirection } from '../../utils/HexMath';
 import { GAME_CONSTANTS, ShipType } from '../../types/GameTypes';
@@ -55,7 +55,7 @@ export function canSailBetween(board: BoardState, from: HexCoord, to: HexCoord):
   // Check if fromHex has an island with an impassable edge in the direction of toHex
   if (fromHex.island) {
     const direction = getDirection(from, to);
-    if (direction !== -1 && !fromHex.island.canSailInDirection(direction)) {
+    if (direction !== -1 && !canSailInDirection(fromHex.island, direction)) {
       return false;
     }
   }
@@ -63,7 +63,7 @@ export function canSailBetween(board: BoardState, from: HexCoord, to: HexCoord):
   // Check if toHex has an island with an impassable edge in the direction of fromHex
   if (toHex.island) {
     const direction = getDirection(to, from);
-    if (direction !== -1 && !toHex.island.canSailInDirection(direction)) {
+    if (direction !== -1 && !canSailInDirection(toHex.island, direction)) {
       return false;
     }
   }

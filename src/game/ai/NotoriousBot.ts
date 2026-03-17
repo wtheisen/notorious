@@ -13,24 +13,18 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
   const playerIndex = parseInt(ctx.currentPlayer);
   const player = G.players[playerIndex];
 
-  // SETUP PHASE: Find valid hexes for port placement
+  // SETUP PHASE: Snake draft - place port+sloops or galleon+sloops
   if (ctx.phase === 'setup') {
+    const needsPort = !player.portLocation;
+    const moveName = needsPort ? 'placePortAndShips' : 'placeGalleonAndShips';
+
     const validHexes = Object.values(G.board.hexes).filter(hex => {
-      // Cannot place on island hex
       if (hex.island) return false;
-
-      // Cannot place where another player already has a port
-      const otherPlayerHasPort = G.players.some((p, i) =>
-        i !== playerIndex && p.portLocation &&
-        p.portLocation.q === hex.coord.q && p.portLocation.r === hex.coord.r
-      );
-      if (otherPlayerHasPort) return false;
-
-      return true;
+      return hex.ships.length === 0;
     });
 
     for (const hex of validHexes) {
-      moves.push({ move: 'placePortAndShips', args: [hex.coord] });
+      moves.push({ move: moveName, args: [hex.coord] });
     }
     return moves;
   }

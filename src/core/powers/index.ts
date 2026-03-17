@@ -14,7 +14,7 @@
 import './strategies';
 
 // Export public API
-export { PiratePowerStrategy } from './PiratePowerStrategy';
+export type { PiratePowerStrategy } from './PiratePowerStrategy';
 export { BasePiratePower } from './BasePiratePower';
 export {
   getPowerStrategy,

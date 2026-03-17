@@ -1,45 +1,43 @@
 import { HexCoord, EdgeDirection } from '../types/CoordinateTypes';
 
 /**
- * Represents an island on the board
- * Islands have impassable edges that block ship movement
+ * Represents an island on the board (plain object for boardgame.io serialization)
  */
-export class Island {
-  public readonly name: string;
-  public readonly hexCoord: HexCoord;
-  public readonly impassableEdges: EdgeDirection[];
-  public readonly icon: string;
+export interface Island {
+  name: string;
+  hexCoord: HexCoord;
+  impassableEdges: EdgeDirection[];
+  icon: string;
+}
 
-  constructor(
-    name: string,
-    hexCoord: HexCoord,
-    impassableEdges: EdgeDirection[],
-    icon: string = ''
-  ) {
-    this.name = name;
-    this.hexCoord = hexCoord;
-    this.impassableEdges = impassableEdges;
-    this.icon = icon;
-  }
+/**
+ * Create an Island plain object
+ */
+export function createIsland(
+  name: string,
+  hexCoord: HexCoord,
+  impassableEdges: EdgeDirection[],
+  icon: string = ''
+): Island {
+  return { name, hexCoord, impassableEdges, icon };
+}
 
-  /**
-   * Check if an edge of this island is passable
-   */
-  isEdgePassable(edge: EdgeDirection): boolean {
-    return !this.impassableEdges.includes(edge);
-  }
+/**
+ * Check if an edge of this island is passable
+ */
+export function isEdgePassable(island: Island, edge: EdgeDirection): boolean {
+  return !island.impassableEdges.includes(edge);
+}
 
-  /**
-   * Check if movement from this island to a specific direction is allowed
-   */
-  canSailInDirection(direction: EdgeDirection): boolean {
-    return this.isEdgePassable(direction);
-  }
+/**
+ * Check if movement from this island in a specific direction is allowed
+ */
+export function canSailInDirection(island: Island, direction: EdgeDirection): boolean {
+  return isEdgePassable(island, direction);
 }
 
 /**
  * Island definitions for the game
- * These will be loaded from islands.json in a full implementation
  */
 export const ISLAND_NAMES = [
   'Havana',

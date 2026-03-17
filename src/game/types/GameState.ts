@@ -79,7 +79,9 @@ export interface NotoriousState {
   windTokenHolder: string | null;
 
   // Setup phase tracking
-  setupComplete: boolean[];  // Track which players have completed setup
+  setupComplete: boolean[];  // Track which players have completed both placements
+  setupPlacements: number[]; // How many placements each player has made (0, 1, or 2)
+  setupRound: number;        // 0 = first round (forward), 1 = second round (reverse/snake)
 
   // Game end tracking - finish the round when someone reaches 24 notoriety
   gameEndTriggered: boolean;

@@ -1,8 +1,13 @@
-import { Board } from './Board';
-import { Island } from './Island';
+import { Island, createIsland } from './Island';
 import { ChartFactory, TreasureMapChart } from './Chart';
 import { ISLAND_DEFINITIONS } from '../config/IslandDefinitions';
 import { BOARD_HEXES } from '../config/HexConstants';
+import { HexCoord } from '../types/CoordinateTypes';
+
+/** Minimal board interface for island placement (duck-typed) */
+interface PlaceableBoard {
+  placeIsland(island: Island): boolean | void;
+}
 
 /**
  * Handles random island placement on the board
@@ -23,7 +28,7 @@ export class IslandPlacer {
    * @param board The game board to place islands on
    * @returns Object containing placed islands and remaining Treasure Maps
    */
-  placeIslands(board: Board): { islands: Island[]; remainingTreasureMaps: TreasureMapChart[] } {
+  placeIslands(board: PlaceableBoard): { islands: Island[]; remainingTreasureMaps: TreasureMapChart[] } {
     console.log('[IslandPlacer] Starting island placement');
 
     // 1. Create 19 Treasure Maps (one for each hex on the board)
@@ -47,12 +52,7 @@ export class IslandPlacer {
       const map = placementMaps[i];
       const def = shuffledIslandDefs[i];
 
-      const island = new Island(
-        def.name,
-        map.targetHex,
-        def.impassableEdges,
-        def.icon
-      );
+      const island = createIsland(def.name, map.targetHex, def.impassableEdges, def.icon);
 
       board.placeIsland(island);
       islands.push(island);
@@ -99,7 +99,7 @@ export class IslandPlacer {
    * @returns Placed islands and remaining maps
    */
   placeIslandsAtPositions(
-    board: Board,
+    board: PlaceableBoard,
     hexIndices: number[]
   ): { islands: Island[]; remainingTreasureMaps: TreasureMapChart[] } {
     if (hexIndices.length !== 5) {
@@ -120,12 +120,7 @@ export class IslandPlacer {
       const hex = BOARD_HEXES[hexIndex];
       const def = ISLAND_DEFINITIONS[i];
 
-      const island = new Island(
-        def.name,
-        hex,
-        def.impassableEdges,
-        def.icon
-      );
+      const island = createIsland(def.name, hex, def.impassableEdges, def.icon);
 
       board.placeIsland(island);
       islands.push(island);

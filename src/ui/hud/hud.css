@@ -1,0 +1,425 @@
+/* ═══════════════════════════════════════════════════
+   NOTORIOUS — HUD Theme
+   Nautical parchment meets dark glass UI
+   ═══════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Outfit:wght@300;400;500;600&display=swap');
+
+:root {
+  /* Glass panel */
+  --hud-bg: rgba(8, 16, 28, 0.82);
+  --hud-bg-solid: rgba(8, 16, 28, 0.94);
+  --hud-border: rgba(80, 120, 160, 0.25);
+  --hud-border-bright: rgba(120, 170, 220, 0.35);
+  --hud-glow: rgba(60, 140, 200, 0.08);
+
+  /* Text */
+  --text-primary: #d4dce8;
+  --text-secondary: #7e95ab;
+  --text-muted: #4e6070;
+  --text-gold: #d4a843;
+
+  /* Player colors */
+  --color-blue: #4499ee;
+  --color-red: #ee4455;
+  --color-green: #44cc55;
+  --color-yellow: #eebb33;
+
+  /* Accents */
+  --accent-confirm: #2f8a4a;
+  --accent-confirm-text: #b8f0c8;
+  --accent-danger: #7a2a2a;
+  --accent-danger-text: #e8a0a0;
+
+  /* Fonts */
+  --font-display: 'Cinzel', serif;
+  --font-body: 'Outfit', system-ui, sans-serif;
+
+  /* Shared radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+/* ── Base panel ── */
+.hud-panel {
+  background: var(--hud-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  font-family: var(--font-body);
+  color: var(--text-primary);
+}
+
+.hud-panel--active {
+  border-color: var(--hud-border-bright);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.4),
+    0 0 12px var(--hud-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* ── Buttons ── */
+.hud-btn {
+  font-family: var(--font-body);
+  font-weight: 500;
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  position: relative;
+  overflow: hidden;
+}
+
+.hud-btn:hover {
+  border-color: var(--hud-border-bright);
+  box-shadow: 0 0 8px var(--hud-glow);
+}
+
+.hud-btn:active {
+  transform: scale(0.97);
+}
+
+.hud-btn--confirm {
+  background: var(--accent-confirm);
+  color: var(--accent-confirm-text);
+  border-color: rgba(68, 170, 100, 0.4);
+}
+.hud-btn--confirm:hover {
+  background: #389a54;
+  border-color: rgba(68, 170, 100, 0.6);
+}
+
+.hud-btn--danger {
+  background: var(--accent-danger);
+  color: var(--accent-danger-text);
+  border-color: rgba(160, 80, 80, 0.3);
+}
+.hud-btn--danger:hover {
+  background: #8a3434;
+  border-color: rgba(160, 80, 80, 0.5);
+}
+
+.hud-btn--ghost {
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.hud-btn--ghost:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text-primary);
+}
+
+/* ── Action buttons ── */
+.action-btn {
+  background: rgba(20, 34, 50, 0.9);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-md);
+  padding: 8px 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 72px;
+  font-family: var(--font-body);
+  position: relative;
+}
+
+.action-btn:hover {
+  background: rgba(30, 50, 72, 0.95);
+  border-color: var(--hud-border-bright);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.action-btn--placed {
+  background: rgba(30, 60, 45, 0.85);
+  border-color: rgba(68, 170, 100, 0.3);
+}
+.action-btn--placed::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 15%;
+  right: 15%;
+  height: 2px;
+  background: var(--color-green);
+  border-radius: 1px;
+}
+
+.action-btn--active {
+  border-color: var(--text-gold);
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.2);
+}
+
+.action-btn--disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.action-btn__icon {
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.action-btn__label {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.action-btn__desc {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+}
+
+/* ── Player panel ── */
+.player-card {
+  padding: 10px 12px;
+  min-width: 170px;
+  transition: all 0.2s ease;
+}
+
+.player-card__name {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.player-card__power {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-bottom: 6px;
+}
+
+.player-card__stat {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  padding: 1px 0;
+}
+
+.player-card__stat-label {
+  color: var(--text-secondary);
+}
+
+.player-card__stat-value {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-card__notoriety-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.player-card__notoriety-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+.player-card__actions {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.player-card__action-tag {
+  font-family: var(--font-display);
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  color: var(--text-secondary);
+}
+
+/* ── Phase indicator ── */
+.phase-indicator {
+  padding: 12px 16px;
+  max-width: 260px;
+}
+
+.phase-indicator__phase {
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-gold);
+}
+
+.phase-indicator__wind {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.phase-indicator__player {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 0.8rem;
+  margin-top: 2px;
+}
+
+.phase-indicator__instruction {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: 6px;
+  line-height: 1.3;
+}
+
+/* ── Chart hand ── */
+.chart-hand__toggle {
+  padding: 7px 14px;
+  font-size: 0.78rem;
+}
+
+.chart-hand__list {
+  min-width: 220px;
+  padding: 6px;
+}
+
+.chart-card {
+  padding: 7px 10px;
+  background: rgba(20, 32, 46, 0.9);
+  border-radius: var(--radius-sm);
+  font-size: 0.73rem;
+  transition: background 0.15s ease;
+}
+.chart-card:hover {
+  background: rgba(30, 45, 60, 0.95);
+}
+
+/* ── Hex info tooltip ── */
+.hex-info {
+  font-size: 0.73rem;
+  padding: 5px 10px;
+  background: var(--hud-bg);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Pirate phase panel ── */
+.pirate-panel {
+  padding: 16px 20px;
+  max-width: 480px;
+  width: 90%;
+}
+
+.pirate-panel__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--text-gold);
+}
+
+.pirate-panel__section-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 4px;
+}
+
+.claim-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  margin-bottom: 3px;
+  background: rgba(20, 32, 46, 0.8);
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  transition: background 0.15s ease;
+}
+.claim-row:hover {
+  background: rgba(30, 45, 60, 0.9);
+}
+
+.claim-btn {
+  padding: 3px 10px;
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+/* ── Sail HUD ── */
+.sail-hud {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sail-hud__label {
+  font-family: var(--font-display);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-gold);
+}
+
+.sail-hud__points {
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.sail-hud__queued {
+  font-size: 0.73rem;
+  color: var(--text-secondary);
+}
+
+/* ── Game over overlay ── */
+.game-over {
+  position: absolute;
+  inset: 0;
+  background: rgba(4, 8, 16, 0.88);
+  backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  font-family: var(--font-body);
+}
+
+.game-over__title {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--text-gold);
+}
+
+.game-over__subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+}

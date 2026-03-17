@@ -197,6 +197,8 @@ export const NotoriousGame: Game<NotoriousState> = {
       windDirection: WindDirection.CLOCKWISE,
       windTokenHolder: null,
       setupComplete: new Array(ctx.numPlayers).fill(false),
+      setupPlacements: new Array(ctx.numPlayers).fill(0),
+      setupRound: 0,
       gameEndTriggered: false,
       piratePhaseTurnsComplete: 0
     };
@@ -206,84 +208,114 @@ export const NotoriousGame: Game<NotoriousState> = {
    * Game phases
    */
   phases: {
-    // SETUP PHASE: Players place their port and initial ships
+    // SETUP PHASE: Snake draft - each player places twice
+    // Round 1 (forward): Player 0→1→2→3, each places Port+2Sloops OR Galleon+2Sloops
+    // Round 2 (reverse): Player 3→2→1→0, each places the other option
     setup: {
-      start: true,  // Game starts in SETUP phase
+      start: true,
 
       onBegin: ({ G }) => {
-        console.log('[SETUP] Phase started - players will place ports and ships');
+        console.log('[SETUP] Phase started - snake draft placement');
       },
 
       turn: {
         order: {
           first: () => 0,
-          next: ({ ctx }) => (ctx.playOrderPos + 1) % ctx.numPlayers
+          next: ({ G, ctx }) => {
+            const n = ctx.numPlayers;
+            // Count total placements to determine round
+            const totalPlacements = G.setupPlacements.reduce((a, b) => a + b, 0);
+            if (totalPlacements < n) {
+              // Round 1: forward
+              const next = ctx.playOrderPos + 1;
+              if (next >= n) return n - 1; // last player goes again for round 2
+              return next;
+            } else {
+              // Round 2: reverse (snake)
+              const next = ctx.playOrderPos - 1;
+              if (next < 0) return undefined;
+              return next;
+            }
+          }
         }
       },
 
       moves: {
         /**
-         * Place port and initial ships in one move
-         * Each player places their port on a hex (not on an island, not occupied)
-         * and places 2 sloops at that location
+         * Place port + 2 sloops on a hex (first placement for this player)
          */
-        placePortAndShips: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, portHex: HexCoord) => {
+        placePortAndShips: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, hex: HexCoord) => {
           const playerIndex = parseInt(ctx.currentPlayer);
           const player = G.players[playerIndex];
 
-          // Validate: player hasn't already completed setup
-          if (G.setupComplete[playerIndex]) {
-            console.log('[SETUP] Player already completed setup');
+          // Must not have placed port yet
+          if (player.portLocation) {
+            console.log('[SETUP] Port already placed');
             return INVALID_MOVE;
           }
 
-          // Validate: hex exists
-          const hex = getHex(G.board, portHex);
-          if (!hex) {
-            console.log('[SETUP] Invalid hex coordinate');
-            return INVALID_MOVE;
-          }
+          const hexState = getHex(G.board, hex);
+          if (!hexState) return INVALID_MOVE;
+          if (hexState.island) { console.log('[SETUP] Cannot place on island'); return INVALID_MOVE; }
+          if (hexState.ships.length > 0) { console.log('[SETUP] Hex occupied'); return INVALID_MOVE; }
 
-          // Validate: hex doesn't have an island
-          if (hex.island) {
-            console.log('[SETUP] Cannot place port on island hex');
-            return INVALID_MOVE;
-          }
+          // Place port
+          setPortLocation(player, hex);
+          placeShip(G.board, hex, { type: ShipType.PORT, playerId: ctx.currentPlayer });
 
-          // Validate: hex is not already occupied by another player's port
-          const otherPlayerHasPort = G.players.some((p, i) =>
-            i !== playerIndex && p.portLocation && hexEquals(p.portLocation, portHex)
-          );
-          if (otherPlayerHasPort) {
-            console.log('[SETUP] Hex already has another player\'s port');
-            return INVALID_MOVE;
-          }
-
-          // Place the port
-          setPortLocation(player, portHex);
-
-          // Add port as a "ship" for influence calculation (PORT type has influence 3)
-          const port: Ship = { type: ShipType.PORT, playerId: ctx.currentPlayer };
-          placeShip(G.board, portHex, port);
-
-          // Place 2 sloops at the port location
-          const sloop1: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
-          const sloop2: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
-          placeShip(G.board, portHex, sloop1);
-          placeShip(G.board, portHex, sloop2);
+          // Place 2 sloops
+          placeShip(G.board, hex, { type: ShipType.SLOOP, playerId: ctx.currentPlayer });
+          placeShip(G.board, hex, { type: ShipType.SLOOP, playerId: ctx.currentPlayer });
           spendShips(player, 'sloops', 2);
 
-          // Mark setup complete for this player
+          G.setupPlacements[playerIndex]++;
+          if (G.setupPlacements[playerIndex] >= 2) G.setupComplete[playerIndex] = true;
+
+          console.log(`[SETUP] Player ${playerIndex + 1} placed port at (${hex.q},${hex.r}) with 2 sloops`);
+          events?.endTurn();
+        },
+
+        /**
+         * Place galleon + 2 sloops on a hex (second placement for this player)
+         */
+        placeGalleonAndShips: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, hex: HexCoord) => {
+          const playerIndex = parseInt(ctx.currentPlayer);
+          const player = G.players[playerIndex];
+
+          // Must have already placed port
+          if (!player.portLocation) {
+            console.log('[SETUP] Must place port first');
+            return INVALID_MOVE;
+          }
+
+          // Must not have completed setup yet
+          if (G.setupComplete[playerIndex]) {
+            console.log('[SETUP] Already completed setup');
+            return INVALID_MOVE;
+          }
+
+          const hexState = getHex(G.board, hex);
+          if (!hexState) return INVALID_MOVE;
+          if (hexState.island) { console.log('[SETUP] Cannot place on island'); return INVALID_MOVE; }
+
+          if (hexState.ships.length > 0) { console.log('[SETUP] Hex occupied'); return INVALID_MOVE; }
+
+          // Place galleon + 2 sloops
+          placeShip(G.board, hex, { type: ShipType.GALLEON, playerId: ctx.currentPlayer });
+          spendShips(player, 'galleons', 1);
+          placeShip(G.board, hex, { type: ShipType.SLOOP, playerId: ctx.currentPlayer });
+          placeShip(G.board, hex, { type: ShipType.SLOOP, playerId: ctx.currentPlayer });
+          spendShips(player, 'sloops', 2);
+
+          G.setupPlacements[playerIndex]++;
           G.setupComplete[playerIndex] = true;
 
-          console.log(`[SETUP] Player ${playerIndex + 1} placed port at (${portHex.q}, ${portHex.r}) with 2 sloops`);
-
+          console.log(`[SETUP] Player ${playerIndex + 1} placed galleon at (${hex.q},${hex.r}) with 2 sloops`);
           events?.endTurn();
-        }
+        },
       },
 
       endIf: ({ G }) => {
-        // End SETUP phase when all players have completed setup
         return G.setupComplete.every(complete => complete);
       },
 
