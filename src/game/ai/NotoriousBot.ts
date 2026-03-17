@@ -213,6 +213,8 @@ function generateBuildMoves(G: NotoriousState, playerId: string, player: any): a
  */
 function generateStealMoves(G: NotoriousState, playerId: string): any[] {
   const moves: any[] = [];
+  const player = G.players.find(p => p.id === playerId);
+  const hasSloops = player && player.ships.sloops > 0;
 
   // Find hexes where we have ships AND opponent has sloops
   const stealHexes = Object.values(G.board.hexes).filter(hex => {
@@ -229,7 +231,7 @@ function generateStealMoves(G: NotoriousState, playerId: string): any[] {
         args: [{
           hex: hex.coord,
           targetPlayerId: enemySloops[0].playerId,
-          replaceWithSloop: true
+          replaceWithSloop: hasSloops ? true : false
         }]
       });
     }
