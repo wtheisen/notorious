@@ -403,18 +403,18 @@
   color: var(--text-secondary);
 }
 
-/* ── Score track ── */
+/* ── Score track (shared single-lane with player cubes) ── */
 .score-track {
-  padding: 8px 14px 10px;
+  padding: 8px 16px 14px;
   min-width: 340px;
-  max-width: 420px;
+  max-width: 460px;
 }
 
 .score-track__header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .score-track__title {
@@ -434,144 +434,96 @@
   letter-spacing: 0.04em;
 }
 
-.score-track__ruler {
+/* The single lane that holds ticks, milestones, and cubes */
+.score-track__lane {
   position: relative;
-  height: 18px;
-  margin: 0 42px 2px 52px; /* align with bar area */
+  height: 50px;
+  margin: 0 6px;
+  overflow: visible;
 }
 
+/* Horizontal rail line */
+.score-track__rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, rgba(92,58,30,0.3), rgba(92,58,30,0.15));
+  border-radius: 1px;
+}
+
+/* Tick marks along the rail */
 .score-track__tick {
   position: absolute;
-  top: 0;
+  top: 50%;
   width: 1px;
-  height: 5px;
+  height: 6px;
   background: rgba(92, 58, 30, 0.2);
-  transform: translateX(-0.5px);
+  transform: translate(-0.5px, -50%);
 }
 
 .score-track__tick--major {
-  height: 9px;
+  height: 12px;
   background: rgba(92, 58, 30, 0.35);
 }
 
 .score-track__tick-label {
   position: absolute;
-  top: -10px;
+  bottom: -14px;
   left: 50%;
   transform: translateX(-50%);
   font-family: var(--font-display);
-  font-size: 0.5rem;
+  font-size: 0.48rem;
   color: var(--text-muted);
   white-space: nowrap;
 }
 
+/* Milestone markers (anchors, skulls) */
 .score-track__milestone {
   position: absolute;
-  top: 0;
+  top: 2px;
   transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  pointer-events: auto;
   z-index: 1;
-}
-
-.score-track__milestone-line {
-  width: 1px;
-  height: 18px;
-  background: rgba(139, 105, 20, 0.4);
-  border-left: 1px dashed rgba(139, 105, 20, 0.5);
+  pointer-events: auto;
 }
 
 .score-track__milestone-icon {
-  position: absolute;
-  bottom: -1px;
-  font-size: 0.5rem;
+  font-size: 0.55rem;
   line-height: 1;
-  white-space: nowrap;
   cursor: default;
+  opacity: 0.5;
 }
 
-.score-track__bar-milestone {
+/* Player cubes */
+.score-track__cube {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(139, 105, 20, 0.2);
-  border-left: 1px dashed rgba(139, 105, 20, 0.25);
-  z-index: 1;
-  pointer-events: none;
-}
-
-.score-track__bars {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.score-track__row {
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  border: 1.5px solid;
   display: flex;
   align-items: center;
-  gap: 6px;
-}
-
-.score-track__name {
+  justify-content: center;
   font-family: var(--font-display);
-  font-size: 0.6rem;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  width: 46px;
-  text-align: right;
-  flex-shrink: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1;
+  cursor: default;
+  transition: left 0.6s ease, transform 0.3s ease;
+  box-shadow:
+    0 1px 3px rgba(0,0,0,0.25),
+    inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
-.score-track__name--active {
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.score-track__bar-bg {
-  flex: 1;
-  height: 14px;
-  background: rgba(92, 58, 30, 0.08);
-  border-radius: 2px;
-  border: 1px solid rgba(92, 58, 30, 0.12);
-  position: relative;
-  overflow: hidden;
-}
-
-.score-track__bar-fill {
-  height: 100%;
-  border-radius: 1px;
-  transition: width 0.6s ease;
-  min-width: 0;
-}
-
-.score-track__bar-value {
-  position: absolute;
-  top: 50%;
-  transform: translate(-110%, -50%);
-  font-family: var(--font-display);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
-  pointer-events: none;
-}
-
-.score-track__doubloons {
-  position: absolute;
-  top: 50%;
-  transform: translate(4px, -50%);
-  font-family: var(--font-body);
-  font-size: 0.5rem;
-  color: var(--text-gold);
-  opacity: 0.7;
-  pointer-events: none;
-  white-space: nowrap;
+.score-track__cube--active {
+  box-shadow:
+    0 0 0 2px rgba(184,150,62,0.6),
+    0 2px 6px rgba(0,0,0,0.3),
+    inset 0 1px 0 rgba(255,255,255,0.2);
+  transform: translateX(-50%) scale(1.15);
 }
 
 /* ── Game over overlay ── */

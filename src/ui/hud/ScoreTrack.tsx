@@ -7,26 +7,18 @@ const WINNING = GAME_CONSTANTS.WINNING_NOTORIETY;
 const CAPTAIN_THRESHOLDS = GAME_CONSTANTS.CAPTAIN_UNLOCK_THRESHOLDS;
 const RAID_THRESHOLDS = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS;
 
-/** Milestone markers on the track */
 const MILESTONES: { at: number; label: string; icon: string }[] = [
   { at: CAPTAIN_THRESHOLDS[0], label: '3rd Captain', icon: '⚓' },
-  { at: CAPTAIN_THRESHOLDS[1], label: '4th Captain', icon: '⚓⚓' },
-  { at: RAID_THRESHOLDS[0], label: '1st Raid claimable · 2nd Raid revealed', icon: '☠' },
-  { at: RAID_THRESHOLDS[1], label: '2nd Raid claimable', icon: '☠☠' },
+  { at: CAPTAIN_THRESHOLDS[1], label: '4th Captain', icon: '⚓' },
+  { at: RAID_THRESHOLDS[0], label: '1st Raid', icon: '☠' },
+  { at: RAID_THRESHOLDS[1], label: '2nd Raid', icon: '☠' },
 ];
 
-const COLOR_HEX: Record<string, string> = {
-  [PlayerColor.BLUE]: '#4499ee',
-  [PlayerColor.RED]: '#ee4455',
-  [PlayerColor.GREEN]: '#44cc55',
-  [PlayerColor.YELLOW]: '#eebb33',
-};
-
-const COLOR_DARK: Record<string, string> = {
-  [PlayerColor.BLUE]: '#2a6090',
-  [PlayerColor.RED]: '#8b2500',
-  [PlayerColor.GREEN]: '#2a6a3a',
-  [PlayerColor.YELLOW]: '#9a7a1a',
+const CUBE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
+  [PlayerColor.BLUE]:   { bg: '#4499ee', border: '#2a6090', text: '#fff' },
+  [PlayerColor.RED]:    { bg: '#ee4455', border: '#8b2500', text: '#fff' },
+  [PlayerColor.GREEN]:  { bg: '#44cc55', border: '#2a6a3a', text: '#fff' },
+  [PlayerColor.YELLOW]: { bg: '#eebb33', border: '#9a7a1a', text: '#3b2a1a' },
 };
 
 interface ScoreTrackProps {
@@ -35,7 +27,13 @@ interface ScoreTrackProps {
 }
 
 export function ScoreTrack({ players, currentPlayerId }: ScoreTrackProps) {
-  const sorted = [...players].sort((a, b) => b.notoriety - a.notoriety);
+  // Group players by notoriety value for stacking
+  const grouped = new Map<number, PlayerState[]>();
+  for (const p of players) {
+    const list = grouped.get(p.notoriety) || [];
+    list.push(p);
+    grouped.set(p.notoriety, list);
+  }
 
   return (
     <div className="hud-panel score-track">
@@ -44,86 +42,67 @@ export function ScoreTrack({ players, currentPlayerId }: ScoreTrackProps) {
         <span className="score-track__goal">{WINNING}</span>
       </div>
 
-      {/* Milestone + tick ruler area */}
-      <div className="score-track__ruler">
+      <div className="score-track__lane">
+        {/* Track background line */}
+        <div className="score-track__rail" />
+
         {/* Tick marks */}
-        {Array.from({ length: WINNING + 1 }, (_, i) => (
-          <div
-            key={i}
-            className={`score-track__tick ${i % 6 === 0 ? 'score-track__tick--major' : ''}`}
-            style={{ left: `${(i / WINNING) * 100}%` }}
-          >
-            {i % 6 === 0 && <span className="score-track__tick-label">{i}</span>}
-          </div>
-        ))}
+        {Array.from({ length: WINNING + 1 }, (_, i) => {
+          const isMajor = i % 7 === 0 || i === WINNING;
+          return (
+            <div
+              key={i}
+              className={`score-track__tick ${isMajor ? 'score-track__tick--major' : ''}`}
+              style={{ left: `${(i / WINNING) * 100}%` }}
+            >
+              {isMajor && (
+                <span className="score-track__tick-label">{i}</span>
+              )}
+            </div>
+          );
+        })}
 
         {/* Milestone markers */}
         {MILESTONES.map(m => (
           <div
-            key={m.at}
+            key={m.at + m.icon}
             className="score-track__milestone"
             style={{ left: `${(m.at / WINNING) * 100}%` }}
             title={`${m.at}: ${m.label}`}
           >
-            <div className="score-track__milestone-line" />
             <span className="score-track__milestone-icon">{m.icon}</span>
           </div>
         ))}
-      </div>
 
-      {/* Player bars */}
-      <div className="score-track__bars">
-        {sorted.map(player => {
-          const pct = Math.min(100, (player.notoriety / WINNING) * 100);
-          const isActive = player.id === currentPlayerId;
-          return (
-            <div key={player.id} className="score-track__row">
+        {/* Player cubes */}
+        {Array.from(grouped.entries()).map(([notoriety, group]) =>
+          group.map((player, stackIdx) => {
+            const pct = (notoriety / WINNING) * 100;
+            const colors = CUBE_COLORS[player.color] || CUBE_COLORS[PlayerColor.BLUE];
+            const isActive = player.id === currentPlayerId;
+            const stackOffset = group.length > 1
+              ? (stackIdx - (group.length - 1) / 2) * 12
+              : 0;
+
+            return (
               <div
-                className={`score-track__name ${isActive ? 'score-track__name--active' : ''}`}
-                style={{ color: COLOR_DARK[player.color] }}
+                key={player.id}
+                className={`score-track__cube ${isActive ? 'score-track__cube--active' : ''}`}
+                style={{
+                  left: `${pct}%`,
+                  transform: `translateX(-50%) translateY(${stackOffset}px)`,
+                  background: colors.bg,
+                  borderColor: colors.border,
+                  color: colors.text,
+                  zIndex: isActive ? 10 : 5,
+                }}
+                title={`${player.name}: ${notoriety} notoriety, ${player.doubloons} doubloons`}
               >
-                {player.name.split(' ').pop()}
+                {player.name.charAt(0)}
               </div>
-              <div className="score-track__bar-bg">
-                {/* Milestone zone lines inside bar area */}
-                {MILESTONES.map(m => (
-                  <div
-                    key={m.at}
-                    className="score-track__bar-milestone"
-                    style={{ left: `${(m.at / WINNING) * 100}%` }}
-                  />
-                ))}
-
-                <div
-                  className="score-track__bar-fill"
-                  style={{
-                    width: `${pct}%`,
-                    background: `linear-gradient(90deg, ${COLOR_DARK[player.color]}, ${COLOR_HEX[player.color]})`,
-                  }}
-                />
-                {player.notoriety > 0 && (
-                  <span
-                    className="score-track__bar-value"
-                    style={{
-                      left: `${Math.max(pct, 6)}%`,
-                      color: pct > 15 ? '#f4e8c1' : COLOR_DARK[player.color],
-                    }}
-                  >
-                    {player.notoriety}
-                  </span>
-                )}
-                {player.doubloons > 0 && (
-                  <span
-                    className="score-track__doubloons"
-                    style={{ left: `${Math.max(pct, 6)}%` }}
-                  >
-                    +{player.doubloons}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );
