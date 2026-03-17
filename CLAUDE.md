@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run dev` — Start dev server on port 3000
 - `npm run build` — Type-check with tsc then build with Vite
 - `npm run preview` — Preview production build
-
-No test framework is configured.
+- `npm test` — Run Vitest test suite
+- `npm run test:watch` — Run Vitest in watch mode
 
 ## Deployment
 
