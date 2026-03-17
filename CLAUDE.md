@@ -34,6 +34,7 @@ Notorious is a pirate-themed digital board game built with **boardgame.io** + **
 - `objects/` — mesh classes (HexTile, HexGrid, ShipMesh, IslandMesh, ActionSpaces, etc.)
 
 **React UI** (`src/ui/`):
+- `App.tsx` — landing page (17th century cartographic style) + boardgame.io client bootstrap
 - `GameScreen.tsx` — main board component implementing boardgame.io's `BoardProps`. Contains all interaction state machine logic (InteractionMode union type) and wires user input to boardgame.io moves.
 - `hud/` — ActionBar, PlayerPanel, PhaseIndicator, ChartHand
 - `dialogs/` — modal dialogs for Build, Steal, Sink, Chart actions
@@ -102,6 +103,17 @@ Powers modify: sail distance, action availability, costs, rewards, passive trigg
 ### Interaction state machine
 
 `GameScreen.tsx` uses an `InteractionMode` discriminated union to track UI state (idle, setup, sail, sail_dragging, build_select_hex, steal_select_hex, sink_premove, sink_select_hex, chart_pick, pirate). Each mode determines which hex clicks/drags are valid and what highlights to show.
+
+### Visual theme
+
+17th century copperplate engraving / etched cartographic map style.
+
+- **Palette**: Parchment cream (`#f4e8c1`), burnt umber (`#5c3a1e`), sepia ink (`#3b2a1a`), faded gold (`#b8963e`), ocean blue-gray (`#6a8a9a`), blood red (`#8b2500`), verdigris green (`#4a7c5c`)
+- **Fonts**: `Cinzel` / `Cinzel Decorative` (display), `IM Fell English` (body) — loaded from Google Fonts
+- **HUD panels**: Solid warm parchment backgrounds (no backdrop-filter blur), double-line / etched borders, embossed inner shadows
+- **Dialogs**: Inline styles using the same parchment palette — `#e8dcc4` backgrounds, `#8b7355` borders, `#4a7c5c` confirm buttons, `#8b2500` danger buttons
+- **3D scene**: Warm parchment background/fog (`0xc4b28a`), golden lighting, paper-thin hex tiles (`depth: 0.02`), muted ocean blue-gray hexes, matte materials
+- **CSS variables**: Defined in `src/ui/hud/hud.css` `:root` — use these for any new UI elements
 
 ## Conventions
 
