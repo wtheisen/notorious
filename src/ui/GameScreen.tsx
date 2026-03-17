@@ -7,7 +7,7 @@ import { hexToWorld } from '../renderer/helpers/HexGeometry';
 import type { NotoriousState, WindTokenState } from '../game/types/GameState';
 import { hexToKey, HexCoord, hexEquals } from '../types/CoordinateTypes';
 import { getValidNeighbors } from '../config/HexConstants';
-import { ActionType, ShipType, WindDirection } from '../types/GameTypes';
+import { ActionType, ShipType, WindDirection, GAME_CONSTANTS } from '../types/GameTypes';
 import { getPowerStrategy } from '../core/powers';
 import { getReachableHexes, SailCheckFn } from '../game/logic/SailLogic';
 import { canSailBetween } from '../game/logic/BoardLogic';
@@ -21,6 +21,7 @@ import { SinkDialog } from './dialogs/SinkDialog';
 import { BuildDialog } from './dialogs/BuildDialog';
 import { PiratePower } from '../types/GameTypes';
 import { ChartHand } from './hud/ChartHand';
+import { ScoreTrack } from './hud/ScoreTrack';
 import type { AnyChart } from '../core/Chart';
 import { pickAIMove } from '../game/ai/AIPlayer';
 
@@ -543,6 +544,10 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
 
       <PhaseIndicator phase={phase} currentPlayer={currentPlayer} windToken={G.windToken} players={G.players} instruction={instruction} />
 
+      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)' }}>
+        <ScoreTrack players={G.players} currentPlayerId={ctx.currentPlayer} />
+      </div>
+
       <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
         {G.players.map(p => <PlayerPanel key={p.id} player={p} isActive={ctx.currentPlayer === p.id} />)}
       </div>
@@ -711,22 +716,39 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
             </div>
           )}
 
-          {G.chartDeck.islandRaids.length > 0 && (
-            <div>
-              <div className="pirate-panel__section-label">Island Raids</div>
-              {G.chartDeck.islandRaids.map(raid => (
-                <div key={raid.id} className="claim-row" style={{ borderLeft: '3px solid #cc4444' }}>
-                  <span>
-                    {(raid as any).targetIsland} — {(raid as any).notorietyReward} not. + {(raid as any).doubloonsOnChart} dbl.
-                  </span>
-                  <button className="hud-btn hud-btn--confirm claim-btn"
-                    onClick={() => moves.claimChart({ chartId: raid.id })}>
-                    Claim
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {G.chartDeck.islandRaids.length > 0 && (() => {
+            const maxNot = Math.max(...G.players.map(p => p.notoriety));
+            return (
+              <div>
+                <div className="pirate-panel__section-label">Island Raids</div>
+                {G.chartDeck.islandRaids.map((raid, idx) => {
+                  const threshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[idx] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+                  const claimable = maxNot >= threshold;
+                  return (
+                    <div key={raid.id} className="claim-row" style={{
+                      borderLeft: `3px solid ${claimable ? '#cc4444' : '#a89060'}`,
+                      opacity: claimable ? 1 : 0.55,
+                    }}>
+                      <span>
+                        {(raid as any).targetIsland} — {(raid as any).notorietyReward} not. + {(raid as any).doubloonsOnChart} dbl.
+                        {!claimable && (
+                          <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginLeft: 6 }}>
+                            (unlocks at {threshold})
+                          </span>
+                        )}
+                      </span>
+                      <button className="hud-btn hud-btn--confirm claim-btn"
+                        disabled={!claimable}
+                        style={!claimable ? { opacity: 0.4, cursor: 'default' } : {}}
+                        onClick={() => claimable && moves.claimChart({ chartId: raid.id })}>
+                        Claim
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {currentPlayer.charts.length === 0 && G.chartDeck.islandRaids.length === 0 && (
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>No charts to claim</div>

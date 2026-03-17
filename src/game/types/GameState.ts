@@ -78,7 +78,8 @@ export interface PlayerState {
 export interface ChartDeckState {
   drawPile: AnyChart[];      // Shuffled deck to draw from
   discardPile: AnyChart[];   // Discarded charts
-  islandRaids: AnyChart[];   // Island raids (publicly visible)
+  islandRaids: AnyChart[];         // Island raids (publicly visible)
+  hiddenIslandRaids: AnyChart[];   // Island raids not yet revealed
 }
 
 /**

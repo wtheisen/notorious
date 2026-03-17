@@ -233,7 +233,8 @@ export const NotoriousGame: Game<NotoriousState> = {
     const chartDeck = {
       drawPile,
       discardPile: [] as AnyChart[],
-      islandRaids: allIslandRaids
+      islandRaids: [allIslandRaids[0]],   // 1st raid visible from start
+      hiddenIslandRaids: allIslandRaids.slice(1),  // 2nd raid revealed at threshold
     };
 
     return {
@@ -1119,12 +1120,12 @@ export const NotoriousGame: Game<NotoriousState> = {
           }
         });
 
-        // Check if 2nd Island Raid should be revealed
-        const hasPlayerAt12 = G.players.some(p => p.notoriety >= 12);
-        if (hasPlayerAt12 && G.chartDeck.islandRaids.length === 2) {
-          // Both raids are already in the array; we'd just mark them as revealed
-          // For now, this is handled by the fact that both are in the array
-          console.log('[PIRATE] Player reached 12 notoriety - 2nd Island Raid revealed');
+        // Reveal hidden island raids at the first threshold
+        const maxNotoriety = Math.max(...G.players.map(p => p.notoriety));
+        if (maxNotoriety >= GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0] && G.chartDeck.hiddenIslandRaids.length > 0) {
+          const raid = G.chartDeck.hiddenIslandRaids.shift()!;
+          G.chartDeck.islandRaids.push(raid);
+          console.log(`[PIRATE] Player reached ${GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0]} notoriety - 2nd Island Raid revealed: ${(raid as any).targetIsland}`);
         }
 
         // Check if game end is triggered (someone reached 24)
@@ -1252,9 +1253,12 @@ export const NotoriousGame: Game<NotoriousState> = {
                 return INVALID_MOVE;
               }
 
-              // Must have at least 2 doubloons on chart
-              if (islandRaid.doubloonsOnChart < 2) {
-                console.log('[CLAIM] Island Raid needs at least 2 doubloons');
+              // Island Raids are only claimable once the notoriety threshold is reached
+              const raidIndex = G.chartDeck.islandRaids.findIndex(r => r.id === claimData.chartId);
+              const raidThreshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[raidIndex] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+              const currentMaxNotoriety = Math.max(...G.players.map(p => p.notoriety));
+              if (currentMaxNotoriety < raidThreshold) {
+                console.log(`[CLAIM] Island Raid not yet claimable (need ${raidThreshold} notoriety, max is ${currentMaxNotoriety})`);
                 return INVALID_MOVE;
               }
 

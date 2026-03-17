@@ -11,13 +11,6 @@ const COLOR_MAP: Record<string, string> = {
   [PlayerColor.YELLOW]: 'var(--color-yellow)',
 };
 
-const COLOR_HEX: Record<string, string> = {
-  [PlayerColor.BLUE]: '#4499ee',
-  [PlayerColor.RED]: '#ee4455',
-  [PlayerColor.GREEN]: '#44cc55',
-  [PlayerColor.YELLOW]: '#eebb33',
-};
-
 interface PlayerPanelProps {
   player: PlayerState;
   isActive: boolean;
@@ -26,7 +19,6 @@ interface PlayerPanelProps {
 export function PlayerPanel({ player, isActive }: PlayerPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const power = getPowerStrategy(player.piratePower);
-  const notorietyPct = Math.min(100, (player.notoriety / 24) * 100);
 
   return (
     <div
@@ -62,20 +54,6 @@ export function PlayerPanel({ player, isActive }: PlayerPanelProps) {
       )}
 
       <div className="player-card__stat">
-        <span className="player-card__stat-label">Notoriety</span>
-        <span className="player-card__stat-value">{player.notoriety}/24</span>
-      </div>
-      <div className="player-card__notoriety-bar">
-        <div
-          className="player-card__notoriety-fill"
-          style={{
-            width: `${notorietyPct}%`,
-            background: COLOR_HEX[player.color] ?? '#fff',
-          }}
-        />
-      </div>
-
-      <div className="player-card__stat" style={{ marginTop: 4 }}>
         <span className="player-card__stat-label">Doubloons</span>
         <span className="player-card__stat-value" style={{ color: 'var(--text-gold)' }}>
           {player.doubloons}

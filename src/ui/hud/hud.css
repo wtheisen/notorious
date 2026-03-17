@@ -403,6 +403,177 @@
   color: var(--text-secondary);
 }
 
+/* ── Score track ── */
+.score-track {
+  padding: 8px 14px 10px;
+  min-width: 340px;
+  max-width: 420px;
+}
+
+.score-track__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+
+.score-track__title {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-gold);
+}
+
+.score-track__goal {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+.score-track__ruler {
+  position: relative;
+  height: 18px;
+  margin: 0 42px 2px 52px; /* align with bar area */
+}
+
+.score-track__tick {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 5px;
+  background: rgba(92, 58, 30, 0.2);
+  transform: translateX(-0.5px);
+}
+
+.score-track__tick--major {
+  height: 9px;
+  background: rgba(92, 58, 30, 0.35);
+}
+
+.score-track__tick-label {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.score-track__milestone {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.score-track__milestone-line {
+  width: 1px;
+  height: 18px;
+  background: rgba(139, 105, 20, 0.4);
+  border-left: 1px dashed rgba(139, 105, 20, 0.5);
+}
+
+.score-track__milestone-icon {
+  position: absolute;
+  bottom: -1px;
+  font-size: 0.5rem;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: default;
+}
+
+.score-track__bar-milestone {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(139, 105, 20, 0.2);
+  border-left: 1px dashed rgba(139, 105, 20, 0.25);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.score-track__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.score-track__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.score-track__name {
+  font-family: var(--font-display);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  width: 46px;
+  text-align: right;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score-track__name--active {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.score-track__bar-bg {
+  flex: 1;
+  height: 14px;
+  background: rgba(92, 58, 30, 0.08);
+  border-radius: 2px;
+  border: 1px solid rgba(92, 58, 30, 0.12);
+  position: relative;
+  overflow: hidden;
+}
+
+.score-track__bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  transition: width 0.6s ease;
+  min-width: 0;
+}
+
+.score-track__bar-value {
+  position: absolute;
+  top: 50%;
+  transform: translate(-110%, -50%);
+  font-family: var(--font-display);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 3px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.score-track__doubloons {
+  position: absolute;
+  top: 50%;
+  transform: translate(4px, -50%);
+  font-family: var(--font-body);
+  font-size: 0.5rem;
+  color: var(--text-gold);
+  opacity: 0.7;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 /* ── Game over overlay ── */
 .game-over {
   position: absolute;

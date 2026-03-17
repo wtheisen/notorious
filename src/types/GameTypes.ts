@@ -111,9 +111,10 @@ export type StateChangeCallback = () => void;
  * Configuration for game constants
  */
 export const GAME_CONSTANTS = {
-  WINNING_NOTORIETY: 24,
+  WINNING_NOTORIETY: 28,
   STARTING_CAPTAINS: 2,
   CAPTAIN_UNLOCK_THRESHOLDS: [5, 12],
+  ISLAND_RAID_THRESHOLDS: [14, 28],
   STARTING_SLOOPS: 4,
   STARTING_GALLEONS: 2,
   STARTING_DOUBLOONS: 0,
