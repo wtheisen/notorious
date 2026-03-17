@@ -14,6 +14,7 @@ import { canSailBetween } from '../game/logic/BoardLogic';
 import './hud/hud.css';
 import { ActionBar } from './hud/ActionBar';
 import { PlayerPanel } from './hud/PlayerPanel';
+import { WindTokenIndicator } from './hud/WindTokenIndicator';
 import { PhaseIndicator } from './hud/PhaseIndicator';
 import { ChartDialog } from './dialogs/ChartDialog';
 import { StealDialog } from './dialogs/StealDialog';
@@ -548,8 +549,18 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         <ScoreTrack players={G.players} currentPlayerId={ctx.currentPlayer} />
       </div>
 
-      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {G.players.map(p => <PlayerPanel key={p.id} player={p} isActive={ctx.currentPlayer === p.id} />)}
+      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+        {G.players.map((p, i) => (
+          <React.Fragment key={p.id}>
+            {i === G.windToken.position + 1 && (
+              <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
+            )}
+            <PlayerPanel player={p} isActive={ctx.currentPlayer === p.id} />
+          </React.Fragment>
+        ))}
+        {G.windToken.position + 1 >= G.players.length && (
+          <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
+        )}
       </div>
 
       {(phase === 'place' || phase === 'play') && !isSailActive && (

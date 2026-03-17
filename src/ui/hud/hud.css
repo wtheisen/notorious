@@ -526,6 +526,49 @@
   transform: translateX(-50%) scale(1.15);
 }
 
+/* ── Wind token indicator ── */
+.wind-token {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.wind-token__icon {
+  color: var(--text-gold);
+  opacity: 0.7;
+  display: flex;
+  align-items: center;
+}
+
+.wind-token__arrows {
+  display: flex;
+  gap: 8px;
+}
+
+.wind-token__dir {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.wind-token__label {
+  font-family: var(--font-display);
+  font-size: 0.5rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.wind-token__arrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--text-gold);
+  line-height: 1;
+}
+
 /* ── Game over overlay ── */
 .game-over {
   position: absolute;
