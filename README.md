@@ -10,6 +10,14 @@ Built with **React**, **Three.js**, and **boardgame.io**. Runs entirely in the b
 
 ---
 
+![Landing Page](screenshots/01-landing.png)
+
+![Game Board - Setup](screenshots/02-setup.png)
+
+![Gameplay - Ships Deployed](screenshots/03-gameplay.png)
+
+---
+
 ## How to Play
 
 **1-4 players** (1 human + up to 3 AI opponents). First to **28 notoriety** wins.
