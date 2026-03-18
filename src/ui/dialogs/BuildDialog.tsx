@@ -131,7 +131,7 @@ export function BuildDialog({ hex, availableSloops, availableGalleons, doubloons
                 onClick={() => setExtraSloops(Math.max(0, extraSloops - 1))}
                 disabled={extraSloops <= 0}
                 style={{
-                  width: 28, height: 28, borderRadius: 3,
+                  width: 44, height: 44, borderRadius: 3,
                   background: 'rgba(184,150,62,0.2)', color: '#5c3a1e', border: '1px solid #a89060',
                   cursor: extraSloops > 0 ? 'pointer' : 'default', fontSize: '1rem',
                 }}
@@ -141,7 +141,7 @@ export function BuildDialog({ hex, availableSloops, availableGalleons, doubloons
                 onClick={() => setExtraSloops(Math.min(maxExtraSloops, extraSloops + 1))}
                 disabled={extraSloops >= maxExtraSloops}
                 style={{
-                  width: 28, height: 28, borderRadius: 3,
+                  width: 44, height: 44, borderRadius: 3,
                   background: 'rgba(184,150,62,0.2)', color: '#5c3a1e', border: '1px solid #a89060',
                   cursor: extraSloops < maxExtraSloops ? 'pointer' : 'default', fontSize: '1rem',
                 }}

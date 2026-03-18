@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import type { BoardProps } from 'boardgame.io/react';
 import * as THREE from 'three';
-import { SceneManager } from '../renderer/SceneManager';
+import { SceneManager, QualityTier } from '../renderer/SceneManager';
 import { GameRenderer } from '../renderer/GameRenderer';
 import { hexToWorld } from '../renderer/helpers/HexGeometry';
 import type { NotoriousState, WindTokenState } from '../game/types/GameState';
@@ -23,6 +23,8 @@ import { BuildDialog } from './dialogs/BuildDialog';
 import { PiratePower } from '../types/GameTypes';
 import { ChartHand } from './hud/ChartHand';
 import { ScoreTrack } from './hud/ScoreTrack';
+import { MobilePlayerDrawer } from './hud/MobilePlayerDrawer';
+import { useMobile } from './hooks/useMobile';
 import type { AnyChart } from '../core/Chart';
 import { pickAIMove } from '../game/ai/AIPlayer';
 
@@ -61,6 +63,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   modeRef.current = mode;
   const dragShipRef = useRef<any>(null);
   const lastShipHoverKey = useRef<string | null>(null);
+
+  const { isMobile, isTablet, isTouchDevice } = useMobile();
 
   const [windTokenPos, setWindTokenPos] = useState(0);
   const [windTokenFlip, setWindTokenFlip] = useState(false);
@@ -102,7 +106,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const scene = new SceneManager(canvas);
+    const quality: QualityTier = ('ontouchstart' in window || navigator.maxTouchPoints > 0) ? 'low' : 'high';
+    const scene = new SceneManager(canvas, quality);
     const gameRenderer = new GameRenderer(scene);
     sceneRef.current = scene;
     rendererRef.current = gameRenderer;
@@ -545,23 +550,33 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
 
       <PhaseIndicator phase={phase} currentPlayer={currentPlayer} windToken={G.windToken} players={G.players} instruction={instruction} />
 
-      <div style={{ position: 'absolute', top: 12, left: '50%', transform: 'translateX(-50%)' }}>
+      <div style={{
+        position: 'absolute',
+        top: isTablet ? 6 : 12,
+        left: isTablet ? 6 : '50%',
+        right: isTablet ? (isTablet ? 90 : undefined) : undefined,
+        transform: isTablet ? 'none' : 'translateX(-50%)',
+      }}>
         <ScoreTrack players={G.players} currentPlayerId={ctx.currentPlayer} />
       </div>
 
-      <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-        {G.players.map((p, i) => (
-          <React.Fragment key={p.id}>
-            {i === G.windToken.position + 1 && (
-              <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
-            )}
-            <PlayerPanel player={p} isActive={ctx.currentPlayer === p.id} />
-          </React.Fragment>
-        ))}
-        {G.windToken.position + 1 >= G.players.length && (
-          <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
-        )}
-      </div>
+      {isTablet ? (
+        <MobilePlayerDrawer players={G.players} currentPlayerId={ctx.currentPlayer} />
+      ) : (
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+          {G.players.map((p, i) => (
+            <React.Fragment key={p.id}>
+              {i === G.windToken.position + 1 && (
+                <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
+              )}
+              <PlayerPanel player={p} isActive={ctx.currentPlayer === p.id} />
+            </React.Fragment>
+          ))}
+          {G.windToken.position + 1 >= G.players.length && (
+            <WindTokenIndicator placeDirection={G.windToken.placeDirection} />
+          )}
+        </div>
+      )}
 
       {(phase === 'place' || phase === 'play') && !isSailActive && (
         <ActionBar

@@ -31,22 +31,28 @@ export class RaycasterManager {
   private lastHoverBorderKey: string | null = null;
   private dragFrom: HexCoord | null = null;
   private isDragging = false;
-  private wantsDrag = false; // true if mousedown was on a draggable hex
-  private mouseDownPos: { x: number; y: number } | null = null;
+  private wantsDrag = false; // true if pointerdown was on a draggable hex
+  private pointerDownPos: { x: number; y: number } | null = null;
+  private pointerDownTime = 0;
   private dragThreshold = 8;
+  private activePointerId: number | null = null;
+  private activePointerType: string = 'mouse';
 
   constructor(camera: THREE.Camera, hexGrid: HexGrid, scene: THREE.Scene, canvas: HTMLCanvasElement) {
     this.camera = camera;
     this.hexGrid = hexGrid;
     this.canvas = canvas;
 
-    this.handleMouseDown = this.handleMouseDown.bind(this);
-    this.handleMouseMove = this.handleMouseMove.bind(this);
-    this.handleMouseUp = this.handleMouseUp.bind(this);
+    // Prevent default touch actions so pointer events work correctly
+    canvas.style.touchAction = 'none';
+
+    this.handlePointerDown = this.handlePointerDown.bind(this);
+    this.handlePointerMove = this.handlePointerMove.bind(this);
+    this.handlePointerUp = this.handlePointerUp.bind(this);
     // Use capture phase so we fire before OrbitControls and can suppress it
-    canvas.addEventListener('mousedown', this.handleMouseDown, true);
-    canvas.addEventListener('mousemove', this.handleMouseMove);
-    canvas.addEventListener('mouseup', this.handleMouseUp);
+    canvas.addEventListener('pointerdown', this.handlePointerDown, true);
+    canvas.addEventListener('pointermove', this.handlePointerMove);
+    canvas.addEventListener('pointerup', this.handlePointerUp);
   }
 
   setOnHexClick(cb: (coord: HexCoord) => void) { this.onHexClick = cb; }
@@ -70,7 +76,7 @@ export class RaycasterManager {
     this.lastHoveredKey = null;
   }
 
-  private updateMouse(event: MouseEvent) {
+  private updatePointer(event: PointerEvent) {
     const rect = this.canvas.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
     this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
@@ -95,10 +101,15 @@ export class RaycasterManager {
 
   private clickedActionSpace = false;
 
-  private handleMouseDown(event: MouseEvent) {
-    if (event.button !== 0) return;
-    this.updateMouse(event);
-    this.mouseDownPos = { x: event.clientX, y: event.clientY };
+  private handlePointerDown(event: PointerEvent) {
+    // Only handle primary pointer (first finger / left mouse button)
+    if (!event.isPrimary) return;
+
+    this.activePointerId = event.pointerId;
+    this.activePointerType = event.pointerType;
+    this.updatePointer(event);
+    this.pointerDownPos = { x: event.clientX, y: event.clientY };
+    this.pointerDownTime = Date.now();
     this.isDragging = false;
     this.wantsDrag = false;
     this.clickedActionSpace = false;
@@ -118,20 +129,29 @@ export class RaycasterManager {
       this.dragFrom = coord;
       if (this.canDrag?.(coord)) {
         this.wantsDrag = true;
+        // Capture pointer for drag to block OrbitControls
+        this.canvas.setPointerCapture(event.pointerId);
         event.stopImmediatePropagation();
       }
     }
   }
 
-  private handleMouseMove(event: MouseEvent) {
-    this.updateMouse(event);
+  private handlePointerMove(event: PointerEvent) {
+    // Only handle the active primary pointer
+    if (!event.isPrimary) return;
+    if (this.activePointerId !== null && event.pointerId !== this.activePointerId) return;
+
+    this.updatePointer(event);
     const coord = this.raycastHex();
 
+    // Use a larger drag threshold for touch to distinguish from taps
+    const threshold = event.pointerType === 'touch' ? 15 : this.dragThreshold;
+
     // Check if we've crossed the drag threshold
-    if (this.dragFrom && this.mouseDownPos && !this.isDragging) {
-      const dx = event.clientX - this.mouseDownPos.x;
-      const dy = event.clientY - this.mouseDownPos.y;
-      if (Math.sqrt(dx * dx + dy * dy) > this.dragThreshold) {
+    if (this.dragFrom && this.pointerDownPos && !this.isDragging) {
+      const dx = event.clientX - this.pointerDownPos.x;
+      const dy = event.clientY - this.pointerDownPos.y;
+      if (Math.sqrt(dx * dx + dy * dy) > threshold) {
         this.isDragging = true;
         this.onDragStart?.(this.dragFrom);
       }
@@ -166,6 +186,9 @@ export class RaycasterManager {
       return;
     }
 
+    // Skip hover effects for touch (no hover state on touch devices)
+    if (event.pointerType === 'touch') return;
+
     // Check action space hover
     if (this.actionSpaces) {
       this.raycaster.setFromCamera(this.mouse, this.camera);
@@ -191,9 +214,16 @@ export class RaycasterManager {
     this.onHexHover?.(coord);
   }
 
-  private handleMouseUp(event: MouseEvent) {
-    if (event.button !== 0) return;
-    this.updateMouse(event);
+  private handlePointerUp(event: PointerEvent) {
+    if (!event.isPrimary) return;
+    if (this.activePointerId !== null && event.pointerId !== this.activePointerId) return;
+
+    // Release pointer capture if we had it
+    if (this.canvas.hasPointerCapture(event.pointerId)) {
+      this.canvas.releasePointerCapture(event.pointerId);
+    }
+
+    this.updatePointer(event);
 
     if (this.isDragging && this.dragFrom) {
       const coord = this.raycastHex();
@@ -205,14 +235,15 @@ export class RaycasterManager {
       this.onDragEnd?.(this.dragFrom, coord);
       this.isDragging = false;
       this.dragFrom = null;
-      this.mouseDownPos = null;
+      this.pointerDownPos = null;
+      this.activePointerId = null;
       this.lastHoveredKey = null;
       return;
     }
 
-    // Action space click (detected on mousedown)
+    // Action space click (detected on pointerdown)
     if (this.clickedActionSpace) {
-      this.updateMouse(event);
+      this.updatePointer(event);
       if (this.actionSpaces && this.onActionSpaceClick) {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         const hits = this.raycaster.intersectObjects(this.actionSpaces.getPlatformMeshes());
@@ -226,26 +257,32 @@ export class RaycasterManager {
       this.clickedActionSpace = false;
       this.isDragging = false;
       this.dragFrom = null;
-      this.mouseDownPos = null;
+      this.pointerDownPos = null;
+      this.activePointerId = null;
       return;
     }
 
-    // Hex click (not a drag)
+    // Hex click (not a drag) - for touch, verify it was a quick tap
     if (this.dragFrom) {
-      const coord = this.raycastHex();
-      if (coord && this.onHexClick) {
-        this.onHexClick(coord);
+      const elapsed = Date.now() - this.pointerDownTime;
+      const isTap = event.pointerType !== 'touch' || elapsed < 300;
+      if (isTap) {
+        const coord = this.raycastHex();
+        if (coord && this.onHexClick) {
+          this.onHexClick(coord);
+        }
       }
     }
 
     this.isDragging = false;
     this.dragFrom = null;
-    this.mouseDownPos = null;
+    this.pointerDownPos = null;
+    this.activePointerId = null;
   }
 
   dispose() {
-    this.canvas.removeEventListener('mousedown', this.handleMouseDown, true);
-    this.canvas.removeEventListener('mousemove', this.handleMouseMove);
-    this.canvas.removeEventListener('mouseup', this.handleMouseUp);
+    this.canvas.removeEventListener('pointerdown', this.handlePointerDown, true);
+    this.canvas.removeEventListener('pointermove', this.handlePointerMove);
+    this.canvas.removeEventListener('pointerup', this.handlePointerUp);
   }
 }

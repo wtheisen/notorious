@@ -254,7 +254,7 @@ export function ChartDialog({ drawnCharts, keepCount: baseKeepCount, maxDoubloon
 
 function bribeBtnStyle(enabled: boolean): React.CSSProperties {
   return {
-    width: 24, height: 24, padding: 0,
+    width: 44, height: 44, padding: 0,
     background: enabled ? 'rgba(184,150,62,0.3)' : 'rgba(139,115,85,0.15)',
     color: enabled ? '#8b6914' : '#a89060',
     border: enabled ? '1px solid #a89060' : '1px solid #c4b28a',

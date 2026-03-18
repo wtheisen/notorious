@@ -653,3 +653,99 @@
   font-family: var(--font-display);
   letter-spacing: 0.06em;
 }
+
+/* ── Responsive: Tablet (max-width: 768px) ── */
+@media (max-width: 768px) {
+  .score-track {
+    min-width: 0;
+    width: 100%;
+    max-width: none;
+  }
+
+  .action-btn {
+    min-width: 56px;
+  }
+
+  .action-btn__desc {
+    display: none;
+  }
+
+  .player-card {
+    min-width: 0;
+  }
+
+  .phase-indicator {
+    max-width: 200px;
+  }
+
+  .game-over__table th,
+  .game-over__table td {
+    padding: 6px 8px;
+    font-size: 0.75rem;
+  }
+}
+
+/* ── Responsive: Phone (max-width: 480px) ── */
+@media (max-width: 480px) {
+  .score-track {
+    padding: 6px 10px 10px;
+  }
+
+  .score-track__lane {
+    height: 40px;
+  }
+
+  .score-track__cube {
+    width: 14px;
+    height: 14px;
+    font-size: 0.48rem;
+  }
+
+  .action-btn {
+    min-width: 48px;
+    padding: 6px 4px;
+  }
+
+  .action-btn__label {
+    font-size: 0.55rem;
+  }
+
+  .action-btn__icon {
+    font-size: 1.1rem;
+  }
+
+  .phase-indicator {
+    padding: 8px 10px;
+    max-width: 160px;
+  }
+
+  .phase-indicator__instruction {
+    display: none;
+  }
+
+  .phase-indicator__phase {
+    font-size: 0.7rem;
+  }
+
+  .phase-indicator__player {
+    font-size: 0.7rem;
+  }
+
+  .chart-hand__list {
+    min-width: 180px;
+  }
+
+  .game-over__title {
+    font-size: 1.4rem;
+  }
+
+  .game-over__subtitle {
+    font-size: 0.85rem;
+  }
+
+  .game-over__table th,
+  .game-over__table td {
+    padding: 5px 6px;
+    font-size: 0.7rem;
+  }
+}

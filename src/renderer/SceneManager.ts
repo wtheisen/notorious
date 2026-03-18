@@ -4,6 +4,8 @@ import { HexGrid } from './objects/HexGrid';
 import { WaterPlane } from './objects/WaterPlane';
 import { ActionSpaces } from './objects/ActionSpaces';
 
+export type QualityTier = 'high' | 'low';
+
 export class SceneManager {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene: THREE.Scene;
@@ -16,17 +18,25 @@ export class SceneManager {
   private animationId: number | null = null;
   private onFrameCallbacks: ((dt: number) => void)[] = [];
 
-  constructor(canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement, quality: QualityTier = 'high') {
+    const isLow = quality === 'low';
+
     // Renderer
     this.renderer = new THREE.WebGLRenderer({
       canvas,
-      antialias: true,
+      antialias: !isLow,
       alpha: false,
     });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLow ? 1.5 : 2));
     this.renderer.setSize(canvas.clientWidth, canvas.clientHeight);
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    if (isLow) {
+      this.renderer.shadowMap.enabled = false;
+    } else {
+      this.renderer.shadowMap.enabled = true;
+      this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.2;
 
@@ -44,14 +54,16 @@ export class SceneManager {
 
     const sunLight = new THREE.DirectionalLight(0xffe8c0, 1.1);
     sunLight.position.set(5, 10, 3);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 25;
-    sunLight.shadow.camera.left = -8;
-    sunLight.shadow.camera.right = 8;
-    sunLight.shadow.camera.top = 8;
-    sunLight.shadow.camera.bottom = -8;
+    if (!isLow) {
+      sunLight.castShadow = true;
+      sunLight.shadow.mapSize.set(1024, 1024);
+      sunLight.shadow.camera.near = 1;
+      sunLight.shadow.camera.far = 25;
+      sunLight.shadow.camera.left = -8;
+      sunLight.shadow.camera.right = 8;
+      sunLight.shadow.camera.top = 8;
+      sunLight.shadow.camera.bottom = -8;
+    }
     this.scene.add(sunLight);
 
     const fillLight = new THREE.DirectionalLight(0x998866, 0.3);
