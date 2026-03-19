@@ -27,6 +27,38 @@ function createRingGeometry(): THREE.ShapeGeometry {
 
 const sharedRingGeo = createRingGeometry();
 
+// Shared hover ring material — never mutated, only toggled visible/invisible
+const sharedHoverRingMat = new THREE.MeshStandardMaterial({
+  color: 0xd4a843,
+  emissive: 0xd4a843,
+  emissiveIntensity: 0.6,
+  roughness: 0.3,
+  metalness: 0.5,
+  transparent: true,
+  opacity: 0.9,
+});
+
+// Cache for control ring materials keyed by color hex (4 player colors + default white = 5 max)
+const controlRingMatCache = new Map<number, THREE.MeshStandardMaterial>();
+
+function getControlRingMat(color: number): THREE.MeshStandardMaterial {
+  let mat = controlRingMatCache.get(color);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({
+      color,
+      roughness: 0.5,
+      metalness: 0.2,
+      transparent: true,
+      opacity: 0.4,
+    });
+    controlRingMatCache.set(color, mat);
+  }
+  return mat;
+}
+
+// Default (hidden) control ring material
+const defaultControlRingMat = getControlRingMat(0xffffff);
+
 export class HexTile {
   readonly mesh: THREE.Mesh;
   readonly coord: HexCoord;
@@ -50,30 +82,14 @@ export class HexTile {
     this.mesh.userData = { type: 'hex', coord };
     this.mesh.receiveShadow = true;
 
-    // Control ring - sits just above the hex tile
-    const ringMat = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      roughness: 0.5,
-      metalness: 0.2,
-      transparent: true,
-      opacity: 0.4,
-    });
-    this.controlRing = new THREE.Mesh(sharedRingGeo, ringMat);
+    // Control ring - sits just above the hex tile (material swapped via cache in setControl)
+    this.controlRing = new THREE.Mesh(sharedRingGeo, defaultControlRingMat);
     this.controlRing.rotation.x = -Math.PI / 2;
     this.controlRing.position.set(pos.x, 0.03, pos.z);
     this.controlRing.visible = false;
 
-    // Gold hover/target ring
-    const hoverRingMat = new THREE.MeshStandardMaterial({
-      color: 0xd4a843,
-      emissive: 0xd4a843,
-      emissiveIntensity: 0.6,
-      roughness: 0.3,
-      metalness: 0.5,
-      transparent: true,
-      opacity: 0.9,
-    });
-    this.hoverRing = new THREE.Mesh(sharedRingGeo, hoverRingMat);
+    // Gold hover/target ring (shared material — never mutated)
+    this.hoverRing = new THREE.Mesh(sharedRingGeo, sharedHoverRingMat);
     this.hoverRing.rotation.x = -Math.PI / 2;
     this.hoverRing.position.set(pos.x, 0.04, pos.z);
     this.hoverRing.visible = false;
@@ -118,7 +134,7 @@ export class HexTile {
     if (color === null) {
       this.controlRing.visible = false;
     } else {
-      (this.controlRing.material as THREE.MeshStandardMaterial).color.setHex(color);
+      this.controlRing.material = getControlRingMat(color);
       this.controlRing.visible = true;
     }
   }
