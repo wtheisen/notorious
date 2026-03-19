@@ -124,21 +124,35 @@ class ActionSpace {
   }
 }
 
+// Shared meeple geometries (same pattern as ShipMesh)
+const meepleBodyGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.15, 8);
+const meepleHeadGeo = new THREE.SphereGeometry(0.045, 8, 6);
+
+// Cached meeple materials by color (same pattern as ShipMesh's materialCache)
+const meepleMaterialCache = new Map<number, THREE.MeshStandardMaterial>();
+
+function getMeepleMat(color: number): THREE.MeshStandardMaterial {
+  let mat = meepleMaterialCache.get(color);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.1 });
+    meepleMaterialCache.set(color, mat);
+  }
+  return mat;
+}
+
 /** Create a captain meeple mesh */
 function createMeeple(color: number): THREE.Group {
   const group = new THREE.Group();
+  const mat = getMeepleMat(color);
 
   // Body - cylinder
-  const bodyGeo = new THREE.CylinderGeometry(0.04, 0.06, 0.15, 8);
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.1 });
-  const body = new THREE.Mesh(bodyGeo, mat);
+  const body = new THREE.Mesh(meepleBodyGeo, mat);
   body.position.y = 0.075;
   body.castShadow = true;
   group.add(body);
 
   // Head - sphere
-  const headGeo = new THREE.SphereGeometry(0.045, 8, 6);
-  const head = new THREE.Mesh(headGeo, mat);
+  const head = new THREE.Mesh(meepleHeadGeo, mat);
   head.position.y = 0.18;
   head.castShadow = true;
   group.add(head);
