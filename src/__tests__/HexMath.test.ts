@@ -117,6 +117,22 @@ describe('BOARD_HEXES', () => {
     expect(isOnBoard(createHexCoord(3, 0))).toBe(false);
   });
 
+  it('all BOARD_HEXES are recognized as on-board', () => {
+    for (const hex of BOARD_HEXES) {
+      expect(isOnBoard(hex)).toBe(true);
+    }
+  });
+
+  it('nearby off-board hexes are rejected', () => {
+    const offBoard = [
+      createHexCoord(3, -3), createHexCoord(-3, 0), createHexCoord(0, 3),
+      createHexCoord(3, -1), createHexCoord(-1, -2), createHexCoord(2, 1),
+    ];
+    for (const hex of offBoard) {
+      expect(isOnBoard(hex)).toBe(false);
+    }
+  });
+
   it('all hexes are within distance 2 of center', () => {
     for (const hex of BOARD_HEXES) {
       expect(hexDistance(hex, createHexCoord(0, 0))).toBeLessThanOrEqual(2);
