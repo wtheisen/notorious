@@ -249,12 +249,12 @@ function generateSinkMoves(G: NotoriousState, playerId: string): any[] {
   // Find hexes where we have ships AND opponent has any ships
   const sinkHexes = Object.values(G.board.hexes).filter(hex => {
     const playerShips = hex.ships.filter(s => s.playerId === playerId);
-    const enemyShips = hex.ships.filter(s => s.playerId !== playerId);
+    const enemyShips = hex.ships.filter(s => s.playerId !== playerId && s.type !== ShipType.PORT);
     return playerShips.length > 0 && enemyShips.length > 0;
   });
 
   for (const hex of sinkHexes) {
-    const enemyShips = hex.ships.filter(s => s.playerId !== playerId);
+    const enemyShips = hex.ships.filter(s => s.playerId !== playerId && s.type !== ShipType.PORT);
     if (enemyShips.length > 0) {
       const target = enemyShips[0];
       moves.push({
