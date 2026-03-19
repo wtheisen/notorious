@@ -9,11 +9,37 @@ interface PlaceableBoard {
   placeIsland(island: Island): boolean | void;
 }
 
+/** A shuffle function that returns a new shuffled copy of the input array */
+export type ShuffleFn = <T>(arr: T[]) => T[];
+
+/**
+ * Default (non-deterministic) Fisher-Yates shuffle.
+ * Only used when no deterministic shuffle is provided (e.g. tests).
+ */
+function defaultShuffle<T>(array: T[]): T[] {
+  const out = [...array];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
 /**
  * Handles random island placement on the board
  * Uses the board game's method: shuffle Treasure Maps, use first 5 to determine positions
  */
 export class IslandPlacer {
+  private shuffle: ShuffleFn;
+
+  /**
+   * @param shuffle Optional deterministic shuffle function (e.g. boardgame.io random.Shuffle).
+   *               Falls back to Math.random if not provided.
+   */
+  constructor(shuffle?: ShuffleFn) {
+    this.shuffle = shuffle ?? defaultShuffle;
+  }
+
   /**
    * Place 5 islands randomly on the board
    *
@@ -36,11 +62,11 @@ export class IslandPlacer {
     console.log(`[IslandPlacer] Created ${allTreasureMaps.length} Treasure Maps`);
 
     // 2. Shuffle them
-    this.shuffle(allTreasureMaps);
+    const shuffledMaps = this.shuffle(allTreasureMaps);
     console.log('[IslandPlacer] Shuffled Treasure Maps');
 
     // 3. Take first 5 for island placement
-    const placementMaps = allTreasureMaps.slice(0, 5);
+    const placementMaps = shuffledMaps.slice(0, 5);
     console.log(`[IslandPlacer] Selected ${placementMaps.length} hexes for islands`);
 
     // 4. Shuffle island definitions to randomize which island goes where
@@ -61,7 +87,7 @@ export class IslandPlacer {
     }
 
     // 6. Return remaining 14 Treasure Maps (these go into the chart deck)
-    const remainingTreasureMaps = allTreasureMaps.slice(5);
+    const remainingTreasureMaps = shuffledMaps.slice(5);
     console.log(`[IslandPlacer] Returning ${remainingTreasureMaps.length} Treasure Maps for deck`);
 
     return {
@@ -76,20 +102,6 @@ export class IslandPlacer {
    */
   private createAllTreasureMaps(): TreasureMapChart[] {
     return BOARD_HEXES.map(hex => ChartFactory.createTreasureMap(hex));
-  }
-
-  /**
-   * Fisher-Yates shuffle algorithm
-   * Shuffles array in place and returns it
-   * @param array Array to shuffle
-   * @returns The shuffled array (same reference)
-   */
-  private shuffle<T>(array: T[]): T[] {
-    for (let i = array.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
-    }
-    return array;
   }
 
   /**

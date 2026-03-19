@@ -37,6 +37,7 @@ export class RaycasterManager {
   private dragThreshold = 8;
   private activePointerId: number | null = null;
   private activePointerType: string = 'mouse';
+  private groundTarget = new THREE.Vector3(); // reused to avoid per-frame allocation
 
   constructor(camera: THREE.Camera, hexGrid: HexGrid, scene: THREE.Scene, canvas: HTMLCanvasElement) {
     this.camera = camera;
@@ -94,9 +95,8 @@ export class RaycasterManager {
   /** Raycast to the ground plane to get a world-space XZ position */
   private raycastGround(): THREE.Vector3 {
     this.raycaster.setFromCamera(this.mouse, this.camera);
-    const target = new THREE.Vector3();
-    this.raycaster.ray.intersectPlane(groundPlane, target);
-    return target;
+    this.raycaster.ray.intersectPlane(groundPlane, this.groundTarget);
+    return this.groundTarget;
   }
 
   private clickedActionSpace = false;

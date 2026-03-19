@@ -192,8 +192,8 @@ export const NotoriousGame: Game<NotoriousState> = {
     // Initialize board
     const board = createEmptyBoard();
 
-    // Place islands - using workaround for Board interface mismatch
-    const islandPlacer = new IslandPlacer();
+    // Place islands — pass deterministic shuffle so placement is replayable
+    const islandPlacer = new IslandPlacer((arr) => random!.Shuffle([...arr]));
     const islands: any[] = [];
 
     // Create a simple adapter for island placement
@@ -939,7 +939,7 @@ export const NotoriousGame: Game<NotoriousState> = {
          * Base: Draw 2 charts, keep 1. Gain the Wind Token.
          * Bribe (repeatable): Either draw 1 more chart OR keep 1 more chart
          */
-        chart: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, chartData: ChartMoveData) => {
+        chart: ({ G, ctx, events, random }: { G: NotoriousState; ctx: Ctx; events: any; random: any }, chartData: ChartMoveData) => {
           const player = G.players[parseInt(ctx.currentPlayer)];
 
           const captainIndex = player.placedCaptains.indexOf(ActionType.CHART);
@@ -973,16 +973,13 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Check if we have charts to draw (reshuffle discard if needed)
           if (G.chartDeck.drawPile.length < drawCount) {
-            // Reshuffle discard pile into draw pile
-            G.chartDeck.drawPile.push(...G.chartDeck.discardPile);
+            // Reshuffle discard pile into draw pile using boardgame.io's
+            // deterministic random so replays and multiplayer stay in sync
+            G.chartDeck.drawPile = random.Shuffle([
+              ...G.chartDeck.drawPile,
+              ...G.chartDeck.discardPile,
+            ]);
             G.chartDeck.discardPile = [];
-            // Note: In a real implementation, we'd use ctx.random to shuffle
-            // For now, simple shuffle
-            for (let i = G.chartDeck.drawPile.length - 1; i > 0; i--) {
-              const j = Math.floor(Math.random() * (i + 1));
-              [G.chartDeck.drawPile[i], G.chartDeck.drawPile[j]] =
-                [G.chartDeck.drawPile[j], G.chartDeck.drawPile[i]];
-            }
           }
 
           // If selection has been made, finalize the action

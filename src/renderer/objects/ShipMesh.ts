@@ -8,6 +8,33 @@ const PLAYER_COLORS: Record<string, number> = {
   [PlayerColor.YELLOW]: 0xddcc33,
 };
 
+// ── Shared geometries (created once, never disposed) ──────────
+
+const sloopGeo = new THREE.ConeGeometry(0.12, 0.3, 4);
+const galleonBodyGeo = new THREE.BoxGeometry(0.2, 0.25, 0.35);
+const galleonMastGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.3);
+const portBodyGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 8);
+const portFlagGeo = new THREE.BoxGeometry(0.15, 0.1, 0.02);
+const portPoleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.3);
+
+// ── Shared materials keyed by (playerColor hex, role) ─────────
+// Materials are shared across all ships of the same color+type so
+// they aren't recreated on every syncShips call.
+
+const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+const mastMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
+const poleMat = mastMat; // same brown for mast and pole
+
+function getShipMat(color: number, roughness: number, metalness: number): THREE.MeshStandardMaterial {
+  const key = `${color}-${roughness}-${metalness}`;
+  let mat = materialCache.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color, roughness, metalness });
+    materialCache.set(key, mat);
+  }
+  return mat;
+}
+
 export class ShipMesh {
   readonly mesh: THREE.Group;
   readonly shipType: ShipType;
@@ -32,51 +59,38 @@ export class ShipMesh {
   }
 
   private createSloop(color: number) {
-    // Small cone for sloop
-    const geo = new THREE.ConeGeometry(0.12, 0.3, 4);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
-    const mesh = new THREE.Mesh(geo, mat);
+    const mat = getShipMat(color, 0.5, 0.2);
+    const mesh = new THREE.Mesh(sloopGeo, mat);
     mesh.position.y = 0.1;
     mesh.castShadow = true;
     this.mesh.add(mesh);
   }
 
   private createGalleon(color: number) {
-    // Larger box for galleon
-    const geo = new THREE.BoxGeometry(0.2, 0.25, 0.35);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: 0.2 });
-    const mesh = new THREE.Mesh(geo, mat);
+    const mat = getShipMat(color, 0.5, 0.2);
+    const mesh = new THREE.Mesh(galleonBodyGeo, mat);
     mesh.position.y = 0.12;
     mesh.castShadow = true;
     this.mesh.add(mesh);
 
-    // Mast
-    const mastGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.3);
-    const mastMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
-    const mast = new THREE.Mesh(mastGeo, mastMat);
+    const mast = new THREE.Mesh(galleonMastGeo, mastMat);
     mast.position.y = 0.35;
     this.mesh.add(mast);
   }
 
   private createPort(color: number) {
-    // Flat cylinder for port
-    const geo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 8);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.4, metalness: 0.3 });
-    const mesh = new THREE.Mesh(geo, mat);
+    const mat = getShipMat(color, 0.4, 0.3);
+    const mesh = new THREE.Mesh(portBodyGeo, mat);
     mesh.position.y = 0.05;
     mesh.castShadow = true;
     this.mesh.add(mesh);
 
-    // Flag on top
-    const flagGeo = new THREE.BoxGeometry(0.15, 0.1, 0.02);
-    const flagMat = new THREE.MeshStandardMaterial({ color });
-    const flag = new THREE.Mesh(flagGeo, flagMat);
+    const flagMat = getShipMat(color, 0.5, 0.5);
+    const flag = new THREE.Mesh(portFlagGeo, flagMat);
     flag.position.set(0.05, 0.25, 0);
     this.mesh.add(flag);
 
-    const poleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.3);
-    const poleMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
+    const pole = new THREE.Mesh(portPoleGeo, poleMat);
     pole.position.y = 0.17;
     this.mesh.add(pole);
   }

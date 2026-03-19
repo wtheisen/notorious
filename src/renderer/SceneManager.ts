@@ -84,6 +84,10 @@ export class SceneManager {
     // Resize handling
     this.handleResize = this.handleResize.bind(this);
     window.addEventListener('resize', this.handleResize);
+
+    // Apply initial resize to pick up correct viewport dimensions
+    // (the canvas may not have final layout dimensions at WebGLRenderer creation)
+    this.handleResize();
   }
 
   onFrame(cb: (dt: number) => void) {

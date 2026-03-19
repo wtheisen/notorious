@@ -20,7 +20,7 @@ export function MobilePlayerDrawer({ players, currentPlayerId }: MobilePlayerDra
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div style={{ position: 'absolute', top: 6, right: 6, zIndex: 20 }}>
+    <div data-testid="mobile-player-drawer" style={{ position: 'absolute', top: 6, right: 6, zIndex: 20 }}>
       {/* Compact bar: colored dots with scores */}
       <div
         className="hud-panel"

@@ -3,14 +3,10 @@ import type { BoardProps } from 'boardgame.io/react';
 import * as THREE from 'three';
 import { SceneManager, QualityTier } from '../renderer/SceneManager';
 import { GameRenderer } from '../renderer/GameRenderer';
-import { hexToWorld } from '../renderer/helpers/HexGeometry';
-import type { NotoriousState, WindTokenState } from '../game/types/GameState';
+import type { NotoriousState } from '../game/types/GameState';
 import { hexToKey, HexCoord, hexEquals } from '../types/CoordinateTypes';
-import { getValidNeighbors } from '../config/HexConstants';
 import { ActionType, ShipType, WindDirection, GAME_CONSTANTS } from '../types/GameTypes';
-import { getPowerStrategy } from '../core/powers';
-import { getReachableHexes, SailCheckFn } from '../game/logic/SailLogic';
-import { canSailBetween } from '../game/logic/BoardLogic';
+import { getReachableHexes } from '../game/logic/SailLogic';
 import './hud/hud.css';
 import { ActionBar } from './hud/ActionBar';
 import { PlayerPanel } from './hud/PlayerPanel';
@@ -25,82 +21,51 @@ import { ChartHand } from './hud/ChartHand';
 import { ScoreTrack } from './hud/ScoreTrack';
 import { MobilePlayerDrawer } from './hud/MobilePlayerDrawer';
 import { useMobile } from './hooks/useMobile';
-import type { AnyChart } from '../core/Chart';
 import { pickAIMove } from '../game/ai/AIPlayer';
-
-interface SailMove {
-  shipType: ShipType;
-  from: HexCoord;
-  to: HexCoord;
-  distance: number;
-}
-
-type InteractionMode =
-  | { type: 'idle' }
-  | { type: 'setup' }
-  | { type: 'place_captain' }
-  | { type: 'sail'; pointsLeft: number; totalPoints: number; bribesUsed: number; queuedMoves: SailMove[] }
-  | { type: 'sail_dragging'; pointsLeft: number; totalPoints: number; bribesUsed: number; queuedMoves: SailMove[]; shipType: ShipType; fromHex: HexCoord; reachable: Map<string, number> }
-  | { type: 'build_select_hex' }
-  | { type: 'build_confirm'; hex: HexCoord }
-  | { type: 'steal_select_hex' }
-  | { type: 'steal_confirm'; hex: HexCoord }
-  | { type: 'sink_select_hex'; sloopMoves: { from: HexCoord; to: HexCoord }[] }
-  | { type: 'sink_premove'; sloopMoves: { from: HexCoord; to: HexCoord }[]; selectedSloop: HexCoord | null; validDests: string[] }
-  | { type: 'sink_confirm'; hex: HexCoord; sloopMoves: { from: HexCoord; to: HexCoord }[] }
-  | { type: 'chart_pick'; drawnCharts: AnyChart[]; keepCount: number; maxDoubloons: number }
-  | { type: 'pirate' }
-  | { type: 'wind_token_decision' };
+import {
+  useInteractionMode,
+  handleHexClick,
+  getInstruction,
+  getHighlightsForMode,
+  type SailMove,
+} from './hooks/useInteractionMode';
 
 export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<SceneManager | null>(null);
   const rendererRef = useRef<GameRenderer | null>(null);
   const [hoveredHex, setHoveredHex] = useState<string | null>(null);
-  const [mode, setMode] = useState<InteractionMode>({ type: 'idle' });
-  const [selectedAction, setSelectedAction] = useState<ActionType | null>(null);
-  const modeRef = useRef(mode);
-  modeRef.current = mode;
   const dragShipRef = useRef<any>(null);
   const lastShipHoverKey = useRef<string | null>(null);
 
   const { isMobile, isTablet, isTouchDevice } = useMobile();
 
-  const [windTokenPos, setWindTokenPos] = useState(0);
-  const [windTokenFlip, setWindTokenFlip] = useState(false);
-  const currentPlayer = G.players[parseInt(ctx.currentPlayer)];
-  const phase = ctx.phase ?? 'setup';
-  const sailMaxDist = currentPlayer
-    ? getPowerStrategy(currentPlayer.piratePower).getSailMaxDistance()
-    : 2;
-  const sailBasePoints = 2;
+  const {
+    mode, setMode, modeRef,
+    selectedAction, setSelectedAction,
+    windTokenPos, setWindTokenPos,
+    windTokenFlip, setWindTokenFlip,
+    currentPlayer, phase, power,
+    sailMaxDist, sailBasePoints, powerSailCheck,
+    submitSail, enterSailMode,
+    handleExecuteAction, handlePlaceCaptain,
+    handleForfeit, handleCancel: handleCancelRaw,
+    handleSailDone: handleSailDoneRaw,
+    handleSailBuyPoint,
+  } = useInteractionMode({ G, ctx, moves });
 
-  // Power-aware sail check (Islander ignores island edges)
-  const power = currentPlayer ? getPowerStrategy(currentPlayer.piratePower) : null;
-  const powerSailCheck: SailCheckFn = (board, from, to) => {
-    if (!power) return canSailBetween(board, from, to);
-    return power.canSailBetween(board, from, to, () => canSailBetween(board, from, to));
-  };
+  // Wrap handleCancel to also sync renderer state
+  const handleCancel = useCallback(() => {
+    handleCancelRaw();
+    const r = rendererRef.current;
+    if (r) { r.clearHighlights(); r.clearPendingMoves(); r.syncState(G); }
+  }, [handleCancelRaw, G]);
 
-  // Helper: submit all queued sail moves
-  const submitSail = useCallback((queuedMoves: SailMove[]) => {
-    if (queuedMoves.length === 0) return;
-    const totalDist = queuedMoves.reduce((sum, m) => sum + m.distance, 0);
-    const bribesNeeded = Math.max(0, totalDist - sailBasePoints);
-    moves.sail({
-      moves: queuedMoves.map(m => ({ shipType: m.shipType, from: m.from, to: m.to })),
-      bribesUsed: bribesNeeded,
-    });
-    setMode({ type: 'idle' });
-    setSelectedAction(null);
-  }, [moves]);
-
-  // Helper: enter sail mode
-  const enterSailMode = useCallback((existingMoves: SailMove[] = [], existingPointsUsed = 0) => {
-    const pointsLeft = sailBasePoints - existingPointsUsed;
-    setMode({ type: 'sail', pointsLeft, totalPoints: sailBasePoints, bribesUsed: 0, queuedMoves: existingMoves });
-    setSelectedAction(ActionType.SAIL);
-  }, [sailBasePoints]);
+  // Wrap handleSailDone to clear pending moves
+  const handleSailDone = useCallback(() => {
+    rendererRef.current?.clearPendingMoves();
+    handleSailDoneRaw();
+  }, [handleSailDoneRaw]);
 
   // Init Three.js
   useEffect(() => {
@@ -124,7 +89,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     else setMode({ type: 'idle' });
   }, [phase, ctx.currentPlayer]);
 
-  // AI auto-play: when it's an AI player's turn, execute a move after a delay
+  // AI auto-play
   useEffect(() => {
     if (!currentPlayer?.isAI) return;
     if (ctx.gameover) return;
@@ -134,7 +99,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       if (aiMove && moves[aiMove.move]) {
         (moves as any)[aiMove.move](...aiMove.args);
       }
-    }, 600); // slight delay so human can see what's happening
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [G, ctx, currentPlayer, moves]);
@@ -163,7 +128,6 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
 
       const ship = myShips.find(s => s.type === ShipType.SLOOP) ?? myShips.find(s => s.type === ShipType.GALLEON) ?? myShips[0];
 
-      // Determine points left: if already in sail mode, use existing; otherwise start fresh
       const m = modeRef.current;
       let pointsLeft = sailBasePoints;
       let totalPoints = sailBasePoints;
@@ -176,10 +140,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         bribesUsed = m.bribesUsed;
       }
 
-      // Limit reachable to remaining points (capped by ship's max distance)
       const maxReach = Math.min(pointsLeft, sailMaxDist);
       const reachable = getReachableHexes(G.board, coord, maxReach, powerSailCheck);
-      // Filter to only hexes within remaining points
       for (const [rk, dist] of reachable) {
         if (dist > pointsLeft) reachable.delete(rk);
       }
@@ -225,22 +187,18 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         const allMoves = [...m.queuedMoves, newMove];
         const newPointsLeft = m.pointsLeft - distance;
 
-        // Rekey the ship mesh so it's tracked under the destination hex
         if (shipMesh) {
           renderer.applyPendingMove(shipMesh, hexToKey(from), to);
         }
 
         if (newPointsLeft <= 0) {
-          // No points left, submit — clear pending moves so syncState can refresh
           renderer.clearPendingMoves();
           submitSail(allMoves);
         } else {
-          // Points remaining — pending move keeps drag lock so syncState doesn't clobber
           renderer.clearHighlights();
           setMode({ type: 'sail', pointsLeft: newPointsLeft, totalPoints: m.totalPoints, bribesUsed: m.bribesUsed, queuedMoves: allMoves });
         }
       } else {
-        // Invalid drop - snap back
         if (shipMesh) renderer.snapShipToHex(shipMesh, hexToKey(from), G);
         renderer.clearHighlights();
         setMode({ type: 'sail', pointsLeft: m.pointsLeft, totalPoints: m.totalPoints, bribesUsed: m.bribesUsed, queuedMoves: m.queuedMoves });
@@ -254,104 +212,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     if (!renderer) return;
 
     renderer.setOnHexClick((coord: HexCoord) => {
-      const key = hexToKey(coord);
-      const hex = G.board.hexes[key];
-      if (!hex) return;
-
-      switch (mode.type) {
-        case 'setup': {
-          if (hex.island) break;
-          // First placement = port+sloops, second = galleon+sloops
-          if (!currentPlayer.portLocation) {
-            moves.placePortAndShips(coord);
-          } else {
-            moves.placeGalleonAndShips(coord);
-          }
-          break;
-        }
-
-        case 'sail': {
-          // In sail mode, clicking a hex with your ships starts selecting that ship
-          const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer && s.type !== ShipType.PORT);
-          if (myShips.length > 0) {
-            // Could start a click-based move from here
-            // For now, drag is primary - click just highlights
-          }
-          break;
-        }
-
-        case 'build_select_hex': {
-          const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-          const isPort = currentPlayer.portLocation && hexEquals(currentPlayer.portLocation, coord);
-          const hasEnemy = hex.ships.some(s => s.playerId !== ctx.currentPlayer);
-          if ((myShips.length > 0 || isPort) && (!hasEnemy || isPort)) {
-            setMode({ type: 'build_confirm', hex: coord });
-          }
-          break;
-        }
-
-        case 'steal_select_hex': {
-          const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-          const enemySloops = hex.ships.filter(s => s.playerId !== ctx.currentPlayer && s.type === ShipType.SLOOP);
-          if (myShips.length > 0 && enemySloops.length > 0) {
-            setMode({ type: 'steal_confirm', hex: coord });
-          }
-          break;
-        }
-
-        case 'sink_select_hex': {
-          // Account for sloop pre-moves: a sloop moved to this hex counts as player presence
-          const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-          const sloopMovedHere = mode.sloopMoves.some(m => hexEquals(m.to, coord));
-          const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
-          if ((myShips.length > 0 || sloopMovedHere) && enemyShips.length > 0) {
-            setMode({ type: 'sink_confirm', hex: coord, sloopMoves: mode.sloopMoves });
-          }
-          break;
-        }
-
-        case 'sink_premove': {
-          if (mode.selectedSloop) {
-            // A sloop is selected — clicking a valid destination queues the move
-            if (mode.validDests.includes(key)) {
-              const newMoves = [...mode.sloopMoves, { from: mode.selectedSloop, to: coord }];
-              setMode({ type: 'sink_premove', sloopMoves: newMoves, selectedSloop: null, validDests: [] });
-            } else {
-              // Clicked elsewhere — deselect
-              setMode({ ...mode, selectedSloop: null, validDests: [] });
-            }
-          } else {
-            // No sloop selected — check doubloon budget first
-            const isRelentless = currentPlayer.piratePower === PiratePower.THE_RELENTLESS;
-            const currentMoveCost = power
-              ? power.modifySinkCost(mode.sloopMoves.length + 1, { movingSloop: true })
-              : mode.sloopMoves.length + 1;
-            if (currentMoveCost > currentPlayer.doubloons) break; // can't afford another move
-
-            // Account for sloops already moved (track their current positions)
-            const movedTo = mode.sloopMoves.map(m => hexToKey(m.to));
-            const originalSloops = hex.ships.filter(
-              s => s.playerId === ctx.currentPlayer && s.type === ShipType.SLOOP
-            ).length;
-            const movedAway = mode.sloopMoves.filter(m => hexEquals(m.from, coord)).length;
-            const movedHere = movedTo.filter(k => k === key).length;
-            const sloopsHere = originalSloops - movedAway + movedHere;
-
-            if (sloopsHere > 0) {
-              // Compute valid adjacent destinations
-              const neighbors = getValidNeighbors(coord);
-              const validDests = neighbors
-                .filter(n => {
-                  const nKey = hexToKey(n);
-                  return G.board.hexes[nKey] && canSailBetween(G.board, coord, n);
-                })
-                .map(n => hexToKey(n));
-              setMode({ ...mode, selectedSloop: coord, validDests });
-            }
-          }
-          break;
-        }
-      }
+      handleHexClick(coord, mode, G, ctx.currentPlayer, currentPlayer, power, moves, setMode);
     });
 
     renderer.setOnHexHover((coord: HexCoord | null) => {
@@ -381,90 +242,12 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     if (mode.type === 'sail_dragging') return;
     renderer.clearHighlights();
 
-    if (mode.type === 'sail') {
-      // Highlight hexes with movable ships
-      for (const [key, hex] of Object.entries(G.board.hexes)) {
-        if (hex.ships.some(s => s.playerId === ctx.currentPlayer && s.type !== ShipType.PORT)) {
-          renderer.setHighlights([key], 'valid');
-        }
-      }
-    } else if (mode.type === 'build_select_hex') {
-      for (const [key, hex] of Object.entries(G.board.hexes)) {
-        const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-        const isPort = currentPlayer.portLocation && hexEquals(currentPlayer.portLocation, hex.coord);
-        const hasEnemy = hex.ships.some(s => s.playerId !== ctx.currentPlayer);
-        if ((myShips.length > 0 || isPort) && (!hasEnemy || isPort)) renderer.setHighlights([key], 'valid');
-      }
-    } else if (mode.type === 'steal_select_hex') {
-      for (const [key, hex] of Object.entries(G.board.hexes)) {
-        const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-        const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
-        if (myShips.length > 0 && enemyShips.length > 0) renderer.setHighlights([key], 'valid');
-      }
-    } else if (mode.type === 'sink_select_hex') {
-      const sloopDestKeys = new Set(mode.sloopMoves.map(m => hexToKey(m.to)));
-      for (const [key, hex] of Object.entries(G.board.hexes)) {
-        const myShips = hex.ships.filter(s => s.playerId === ctx.currentPlayer);
-        const sloopMovedHere = sloopDestKeys.has(key);
-        const enemyShips = hex.ships.filter(s => s.playerId !== ctx.currentPlayer);
-        if ((myShips.length > 0 || sloopMovedHere) && enemyShips.length > 0) renderer.setHighlights([key], 'valid');
-      }
-    } else if (mode.type === 'sink_premove') {
-      if (mode.selectedSloop) {
-        // Highlight selected sloop and valid destinations
-        renderer.setHighlights([hexToKey(mode.selectedSloop)], 'selected');
-        renderer.setHighlights(mode.validDests, 'valid');
-      } else {
-        // Highlight hexes with our sloops (accounting for queued moves)
-        const movedTo = mode.sloopMoves.map(m => hexToKey(m.to));
-        for (const [key, hex] of Object.entries(G.board.hexes)) {
-          const originalSloops = hex.ships.filter(
-            s => s.playerId === ctx.currentPlayer && s.type === ShipType.SLOOP
-          ).length;
-          const movedAway = mode.sloopMoves.filter(m => hexToKey(m.from) === key).length;
-          const movedHere = movedTo.filter(k => k === key).length;
-          if (originalSloops - movedAway + movedHere > 0) {
-            renderer.setHighlights([key], 'valid');
-          }
-        }
-      }
-    }
+    const highlights = getHighlightsForMode(mode, G, ctx.currentPlayer, currentPlayer);
+    if (highlights.selected.length > 0) renderer.setHighlights(highlights.selected, 'selected');
+    if (highlights.valid.length > 0) renderer.setHighlights(highlights.valid, 'valid');
   }, [G, mode, ctx.currentPlayer]);
 
-  // Handlers
-  const handlePlaceCaptain = useCallback((action: ActionType) => { moves.placeCaptain(action); }, [moves]);
-
-  const handleExecuteAction = useCallback((action: ActionType) => {
-    setSelectedAction(action);
-    switch (action) {
-      case ActionType.SAIL: enterSailMode(); break;
-      case ActionType.BUILD: setMode({ type: 'build_select_hex' }); break;
-      case ActionType.STEAL: setMode({ type: 'steal_select_hex' }); break;
-      case ActionType.SINK: {
-        setMode({ type: 'sink_premove', sloopMoves: [], selectedSloop: null, validDests: [] });
-        break;
-      }
-      case ActionType.CHART: {
-        // Peek at extra charts in case player wants to bribe for more draws
-        const baseDrawCount = 2;
-        const baseKeepCount = 1;
-        const maxBribes = currentPlayer.doubloons;
-        // Pre-peek up to baseDrawCount + maxBribes (capped by deck size)
-        const maxPeek = Math.min(baseDrawCount + maxBribes, G.chartDeck.drawPile.length);
-        const peeked = G.chartDeck.drawPile.slice(0, maxPeek);
-        if (peeked.length === 0) { break; }
-        if (peeked.length <= baseKeepCount && maxBribes === 0) {
-          moves.chart({ bribeChoices: [], selectedChartIds: peeked.map(c => c.id) });
-          setMode({ type: 'idle' }); setSelectedAction(null);
-        } else {
-          setMode({ type: 'chart_pick', drawnCharts: peeked, keepCount: baseKeepCount, maxDoubloons: maxBribes });
-        }
-        break;
-      }
-    }
-  }, [moves, enterSailMode, currentPlayer, G]);
-
-  // Wire action space clicks (PLACE + PLAY phases)
+  // Wire action space clicks
   useEffect(() => {
     const renderer = rendererRef.current;
     if (!renderer) return;
@@ -480,67 +263,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     });
   }, [phase, moves, currentPlayer, handleExecuteAction]);
 
-  const handleForfeit = useCallback(() => { moves.skipAction?.(); setMode({ type: 'idle' }); setSelectedAction(null); }, [moves]);
-
-  const handleCancel = useCallback(() => {
-    setMode({ type: 'idle' }); setSelectedAction(null);
-    const r = rendererRef.current;
-    if (r) { r.clearHighlights(); r.clearPendingMoves(); r.syncState(G); }
-  }, [G]);
-
-  const handleSailDone = useCallback(() => {
-    if (mode.type === 'sail' && mode.queuedMoves.length > 0) {
-      rendererRef.current?.clearPendingMoves();
-      submitSail(mode.queuedMoves);
-    }
-  }, [mode, submitSail]);
-
-  const handleSailBuyPoint = useCallback(() => {
-    if (mode.type !== 'sail') return;
-    const doubloonsBudget = currentPlayer.doubloons - mode.bribesUsed;
-    if (doubloonsBudget <= 0) return;
-    setMode({
-      ...mode,
-      pointsLeft: mode.pointsLeft + 1,
-      totalPoints: mode.totalPoints + 1,
-      bribesUsed: mode.bribesUsed + 1,
-    });
-  }, [mode, currentPlayer]);
-
-  // Instruction text
-  let instruction = '';
-  switch (mode.type) {
-    case 'setup':
-      instruction = !currentPlayer.portLocation
-        ? 'Click an ocean hex to place your port + 2 sloops'
-        : 'Click an ocean hex to place a galleon + 2 sloops';
-      break;
-    case 'place_captain': instruction = 'Choose an action to assign a captain'; break;
-    case 'sail': instruction = `SAIL: ${mode.pointsLeft}/${mode.totalPoints} movement points left — drag a ship`; break;
-    case 'sail_dragging': instruction = `Drop on a blue hex (${mode.pointsLeft} pts left)`; break;
-    case 'build_select_hex': instruction = 'Click a hex with your pieces to build'; break;
-    case 'steal_select_hex': instruction = 'Click a shared hex to steal a sloop'; break;
-    case 'sink_select_hex': instruction = 'Click a hex with your ships and enemy ships'; break;
-    case 'sink_premove': {
-      if (mode.selectedSloop) {
-        instruction = 'Click an adjacent hex to move the sloop there';
-      } else {
-        const moveCount = mode.sloopMoves.length;
-        instruction = moveCount > 0
-          ? `SINK: ${moveCount} sloop move${moveCount > 1 ? 's' : ''} queued — click another sloop or proceed`
-          : 'SINK: Click a sloop to pre-move it (1 dbl each), or skip to select target';
-      }
-      break;
-    }
-    case 'sink_confirm': instruction = 'Choose which ship to sink'; break;
-    case 'pirate': instruction = 'Claim charts or click Done'; break;
-    case 'wind_token_decision': instruction = 'You hold the Wind Token — choose position and direction'; break;
-    case 'idle':
-      if (phase === 'play' && currentPlayer.placedCaptains.length > 0)
-        instruction = 'Choose an action, or drag a ship to sail';
-      break;
-  }
-
+  const instruction = getInstruction(mode, phase, currentPlayer, power);
   const isSailActive = mode.type === 'sail' || mode.type === 'sail_dragging';
   const sailHasQueuedMoves = (mode.type === 'sail' && mode.queuedMoves.length > 0);
 
@@ -563,7 +286,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       {isTablet ? (
         <MobilePlayerDrawer players={G.players} currentPlayerId={ctx.currentPlayer} />
       ) : (
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+        <div data-testid="desktop-player-panels" style={{ position: 'absolute', top: 12, right: 12, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
           {G.players.map((p, i) => (
             <React.Fragment key={p.id}>
               {i === G.windToken.position + 1 && (
@@ -657,8 +380,8 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
 
       {/* Sink pre-move HUD */}
       {mode.type === 'sink_premove' && (() => {
-        const isRelentless = currentPlayer.piratePower === PiratePower.THE_RELENTLESS;
         const sloopMoveBribes = power ? power.modifySinkCost(mode.sloopMoves.length, { movingSloop: mode.sloopMoves.length > 0 }) : mode.sloopMoves.length;
+        const isRelentless = currentPlayer.piratePower === PiratePower.THE_RELENTLESS;
         const canAffordMore = sloopMoveBribes < currentPlayer.doubloons || (isRelentless && mode.sloopMoves.length === 0);
         return (
           <div className="hud-panel sail-hud" style={{
@@ -708,7 +431,6 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <span className="pirate-panel__title">Pirate Phase</span>
             <button className="hud-btn hud-btn--confirm" onClick={() => {
-              // If current player holds the wind token, show decision UI first
               if (G.windToken.holder === ctx.currentPlayer && !currentPlayer.isAI) {
                 setWindTokenPos(G.windToken.position);
                 setWindTokenFlip(false);
@@ -854,7 +576,6 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
       {mode.type === 'steal_confirm' && (() => {
         const hex = G.board.hexes[hexToKey(mode.hex)];
         if (!hex) return null;
-        // Build target list: enemy players with sloops in this hex
         const enemyPlayerIds = new Set(
           hex.ships.filter(s => s.playerId !== ctx.currentPlayer && s.type === ShipType.SLOOP).map(s => s.playerId)
         );
@@ -890,7 +611,6 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
           const p = G.players.find(pl => pl.id === s.playerId)!;
           return { playerId: s.playerId, playerName: p.name, playerColor: p.color, shipType: s.type };
         });
-        // Reduce available doubloons by sloop pre-move cost
         const sloopMoveCost = power && mode.sloopMoves.length > 0
           ? power.modifySinkCost(mode.sloopMoves.length, { movingSloop: true })
           : mode.sloopMoves.length;
