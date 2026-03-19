@@ -168,6 +168,67 @@ describe('Bug Fix #3: AI uses wrap-aware neighbors', () => {
   });
 });
 
+describe('Bug Fix #5: AI does not try to sink PORT ships', () => {
+  it('generateSinkMoves excludes PORT ships as targets', () => {
+    const sharedHex = createHexCoord(1, 0);
+    const state = makeMinimalState({
+      hexOverrides: {
+        [hexToKey(sharedHex)]: {
+          coord: sharedHex,
+          ships: [
+            { type: ShipType.SLOOP, playerId: '1' },
+            { type: ShipType.PORT, playerId: '2' },
+          ],
+          island: null
+        }
+      },
+      players: [
+        makePlayer('0'),
+        makePlayer('1', { placedCaptains: [ActionType.SINK] }),
+        makePlayer('2', { portLocation: sharedHex }),
+        makePlayer('3')
+      ]
+    });
+
+    const ctx = makeCtx('play', '1');
+    const moves = enumerateMoves(state as any, ctx);
+
+    const sinkMoves = moves.filter(m => m.move === 'sink');
+    // No valid sink targets — only enemy ship is a PORT
+    expect(sinkMoves.length).toBe(0);
+  });
+
+  it('generateSinkMoves still targets non-PORT enemy ships', () => {
+    const sharedHex = createHexCoord(1, 0);
+    const state = makeMinimalState({
+      hexOverrides: {
+        [hexToKey(sharedHex)]: {
+          coord: sharedHex,
+          ships: [
+            { type: ShipType.SLOOP, playerId: '1' },
+            { type: ShipType.PORT, playerId: '2' },
+            { type: ShipType.SLOOP, playerId: '2' },
+          ],
+          island: null
+        }
+      },
+      players: [
+        makePlayer('0'),
+        makePlayer('1', { placedCaptains: [ActionType.SINK] }),
+        makePlayer('2', { portLocation: sharedHex }),
+        makePlayer('3')
+      ]
+    });
+
+    const ctx = makeCtx('play', '1');
+    const moves = enumerateMoves(state as any, ctx);
+
+    const sinkMoves = moves.filter(m => m.move === 'sink');
+    expect(sinkMoves.length).toBe(1);
+    expect(sinkMoves[0].args[0].targetShipType).toBe(ShipType.SLOOP);
+  });
+});
+
 describe('Bug Fix #1: AI claims charts during Pirate phase', () => {
   it('enumerates claimChart for a claimable Treasure Map', () => {
     const targetHex = createHexCoord(1, 0);
