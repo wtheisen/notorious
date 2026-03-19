@@ -22,8 +22,11 @@ const portPoleGeo = new THREE.CylinderGeometry(0.015, 0.015, 0.3);
 // they aren't recreated on every syncShips call.
 
 const materialCache = new Map<string, THREE.MeshStandardMaterial>();
+const highlightCache = new Map<string, THREE.MeshStandardMaterial>();
 const mastMat = new THREE.MeshStandardMaterial({ color: 0x8b6b3a });
+const mastMatHighlight = new THREE.MeshStandardMaterial({ color: 0x8b6b3a, emissive: new THREE.Color(0x444444) });
 const poleMat = mastMat; // same brown for mast and pole
+const poleMatHighlight = mastMatHighlight;
 
 function getShipMat(color: number, roughness: number, metalness: number): THREE.MeshStandardMaterial {
   const key = `${color}-${roughness}-${metalness}`;
@@ -35,10 +38,21 @@ function getShipMat(color: number, roughness: number, metalness: number): THREE.
   return mat;
 }
 
+function getShipMatHighlight(color: number, roughness: number, metalness: number): THREE.MeshStandardMaterial {
+  const key = `${color}-${roughness}-${metalness}`;
+  let mat = highlightCache.get(key);
+  if (!mat) {
+    mat = new THREE.MeshStandardMaterial({ color, roughness, metalness, emissive: new THREE.Color(0x444444) });
+    highlightCache.set(key, mat);
+  }
+  return mat;
+}
+
 export class ShipMesh {
   readonly mesh: THREE.Group;
   readonly shipType: ShipType;
   readonly playerId: string;
+  private materialPairs: { mesh: THREE.Mesh; normal: THREE.MeshStandardMaterial; highlight: THREE.MeshStandardMaterial }[] = [];
 
   constructor(shipType: ShipType, playerColor: PlayerColor) {
     this.shipType = shipType;
@@ -58,41 +72,50 @@ export class ShipMesh {
     this.mesh.userData = { type: 'ship', shipType, playerColor };
   }
 
+  private addMeshWithHighlight(mesh: THREE.Mesh, normal: THREE.MeshStandardMaterial, highlight: THREE.MeshStandardMaterial) {
+    this.mesh.add(mesh);
+    this.materialPairs.push({ mesh, normal, highlight });
+  }
+
   private createSloop(color: number) {
     const mat = getShipMat(color, 0.5, 0.2);
+    const hlMat = getShipMatHighlight(color, 0.5, 0.2);
     const mesh = new THREE.Mesh(sloopGeo, mat);
     mesh.position.y = 0.1;
     mesh.castShadow = true;
-    this.mesh.add(mesh);
+    this.addMeshWithHighlight(mesh, mat, hlMat);
   }
 
   private createGalleon(color: number) {
     const mat = getShipMat(color, 0.5, 0.2);
+    const hlMat = getShipMatHighlight(color, 0.5, 0.2);
     const mesh = new THREE.Mesh(galleonBodyGeo, mat);
     mesh.position.y = 0.12;
     mesh.castShadow = true;
-    this.mesh.add(mesh);
+    this.addMeshWithHighlight(mesh, mat, hlMat);
 
     const mast = new THREE.Mesh(galleonMastGeo, mastMat);
     mast.position.y = 0.35;
-    this.mesh.add(mast);
+    this.addMeshWithHighlight(mast, mastMat, mastMatHighlight);
   }
 
   private createPort(color: number) {
     const mat = getShipMat(color, 0.4, 0.3);
+    const hlMat = getShipMatHighlight(color, 0.4, 0.3);
     const mesh = new THREE.Mesh(portBodyGeo, mat);
     mesh.position.y = 0.05;
     mesh.castShadow = true;
-    this.mesh.add(mesh);
+    this.addMeshWithHighlight(mesh, mat, hlMat);
 
     const flagMat = getShipMat(color, 0.5, 0.5);
+    const flagHlMat = getShipMatHighlight(color, 0.5, 0.5);
     const flag = new THREE.Mesh(portFlagGeo, flagMat);
     flag.position.set(0.05, 0.25, 0);
-    this.mesh.add(flag);
+    this.addMeshWithHighlight(flag, flagMat, flagHlMat);
 
     const pole = new THREE.Mesh(portPoleGeo, poleMat);
     pole.position.y = 0.17;
-    this.mesh.add(pole);
+    this.addMeshWithHighlight(pole, poleMat, poleMatHighlight);
   }
 
   setPosition(x: number, y: number, z: number) {
@@ -100,11 +123,9 @@ export class ShipMesh {
   }
 
   setHighlight(on: boolean) {
-    this.mesh.traverse(child => {
-      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-        child.material.emissive.setHex(on ? 0x444444 : 0x000000);
-      }
-    });
+    for (const pair of this.materialPairs) {
+      pair.mesh.material = on ? pair.highlight : pair.normal;
+    }
     this.mesh.scale.setScalar(on ? 1.25 : 1);
   }
 }
