@@ -63,11 +63,14 @@ export interface EdgeWrap {
   };
 }
 
+/** Precomputed set for O(1) board membership checks */
+const BOARD_HEX_SET = new Set(BOARD_HEXES.map(h => `${h.q},${h.r}`));
+
 /**
  * Check if a hex is on the board
  */
 export function isOnBoard(coord: HexCoord): boolean {
-  return BOARD_HEXES.some(hex => hex.q === coord.q && hex.r === coord.r);
+  return BOARD_HEX_SET.has(`${coord.q},${coord.r}`);
 }
 
 /**
