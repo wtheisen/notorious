@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { PlayerColor, ShipType } from '../../types/GameTypes';
 
 const PLAYER_COLORS: Record<string, number> = {
-  [PlayerColor.BLUE]: 0x3388dd,
+  [PlayerColor.BLUE]: 0x1155bb,
   [PlayerColor.RED]: 0xdd3333,
   [PlayerColor.GREEN]: 0x33bb33,
   [PlayerColor.YELLOW]: 0xddcc33,

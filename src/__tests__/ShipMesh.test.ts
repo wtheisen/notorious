@@ -89,4 +89,20 @@ describe('ShipMesh', () => {
     const ship = new ShipMesh(ShipType.PORT, PlayerColor.RED);
     expect(ship.mesh.children.length).toBe(3);
   });
+
+  describe('player colors', () => {
+    it('blue ship uses deep blue (0x1155bb) for visibility against ocean tiles', () => {
+      const ship = new ShipMesh(ShipType.SLOOP, PlayerColor.BLUE);
+      const body = ship.mesh.children[0] as THREE.Mesh;
+      const mat = body.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHex()).toBe(0x1155bb);
+    });
+
+    it('blue ship color is distinct from ocean tile color (0x6a8a9a)', () => {
+      const ship = new ShipMesh(ShipType.SLOOP, PlayerColor.BLUE);
+      const body = ship.mesh.children[0] as THREE.Mesh;
+      const mat = body.material as THREE.MeshStandardMaterial;
+      expect(mat.color.getHex()).not.toBe(0x6a8a9a);
+    });
+  });
 });

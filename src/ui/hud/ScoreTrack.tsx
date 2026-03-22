@@ -15,7 +15,7 @@ const MILESTONES: { at: number; label: string; icon: string }[] = [
 ];
 
 const CUBE_COLORS: Record<string, { bg: string; border: string; text: string }> = {
-  [PlayerColor.BLUE]:   { bg: '#4499ee', border: '#2a6090', text: '#fff' },
+  [PlayerColor.BLUE]:   { bg: '#1155bb', border: '#0a3a80', text: '#fff' },
   [PlayerColor.RED]:    { bg: '#ee4455', border: '#8b2500', text: '#fff' },
   [PlayerColor.GREEN]:  { bg: '#44cc55', border: '#2a6a3a', text: '#fff' },
   [PlayerColor.YELLOW]: { bg: '#eebb33', border: '#9a7a1a', text: '#3b2a1a' },
