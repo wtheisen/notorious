@@ -61,9 +61,9 @@ class ActionSpace {
     this.ring.position.y = 0.07;
     this.mesh.add(this.ring);
 
-    // Label
+    // Label — raised above meeples so captains don't occlude the text
     this.label = this.createLabel(ACTION_ICONS[action]);
-    this.label.position.y = 0.15;
+    this.label.position.y = 0.38;
     this.mesh.add(this.label);
 
     // Meeple container

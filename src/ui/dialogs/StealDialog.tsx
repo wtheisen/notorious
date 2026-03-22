@@ -49,7 +49,7 @@ export function StealDialog({ hex, targets, canReplace, onConfirm, onCancel }: S
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontFamily: "'Cinzel', serif", color: '#3b2a1a' }}>Steal Action</h3>
         <p style={{ margin: '0 0 16px', color: '#6b5340', fontSize: '0.85rem', fontFamily: "'IM Fell English', Georgia, serif" }}>
-          Steal an enemy sloop at hex ({hex.q},{hex.r})
+          Steal an enemy sloop at this hex
         </p>
 
         {/* Target selection */}

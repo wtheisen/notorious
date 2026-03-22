@@ -69,7 +69,7 @@ export function SinkDialog({ hex, targets, isRelentless, doubloons, onConfirm, o
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontFamily: "'Cinzel', serif", color: '#8b2500' }}>Sink Action</h3>
         <p style={{ margin: '0 0 4px', color: '#6b5340', fontSize: '0.85rem', fontFamily: "'IM Fell English', Georgia, serif" }}>
-          Sink enemy ships at hex ({hex.q},{hex.r})
+          Sink enemy ships at this hex
         </p>
         {targets.length > 1 && doubloons > 0 && (
           <p style={{ margin: '0 0 12px', color: '#8b7960', fontSize: '0.75rem' }}>

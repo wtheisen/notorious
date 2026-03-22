@@ -58,7 +58,7 @@ export function BuildDialog({ hex, availableSloops, availableGalleons, doubloons
       }}>
         <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontFamily: "'Cinzel', serif", color: '#3b2a1a' }}>Build Action</h3>
         <p style={{ margin: '0 0 16px', color: '#6b5340', fontSize: '0.85rem', fontFamily: "'IM Fell English', Georgia, serif" }}>
-          Deploy ships at hex ({hex.q},{hex.r})
+          Deploy ships at this hex
         </p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>

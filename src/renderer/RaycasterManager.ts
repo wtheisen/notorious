@@ -153,6 +153,7 @@ export class RaycasterManager {
       const dy = event.clientY - this.pointerDownPos.y;
       if (Math.sqrt(dx * dx + dy * dy) > threshold) {
         this.isDragging = true;
+        this.canvas.style.cursor = 'grabbing';
         this.onDragStart?.(this.dragFrom);
       }
     }
@@ -190,10 +191,11 @@ export class RaycasterManager {
     if (event.pointerType === 'touch') return;
 
     // Check action space hover
+    let hoveredAction: ActionType | null = null;
     if (this.actionSpaces) {
       this.raycaster.setFromCamera(this.mouse, this.camera);
       const actionHits = this.raycaster.intersectObjects(this.actionSpaces.getPlatformMeshes());
-      const hoveredAction = actionHits.length > 0
+      hoveredAction = actionHits.length > 0
         ? this.actionSpaces.getActionFromMesh(actionHits[0].object)
         : null;
       this.actionSpaces.updateHover(hoveredAction);
@@ -210,6 +212,9 @@ export class RaycasterManager {
       }
       this.lastHoveredKey = newKey;
     }
+
+    // Update cursor: pointer for interactive elements, default otherwise
+    this.canvas.style.cursor = (coord || hoveredAction) ? 'pointer' : 'default';
 
     this.onHexHover?.(coord);
   }
@@ -232,6 +237,7 @@ export class RaycasterManager {
         this.hexGrid.getTile(this.lastHoverBorderKey)?.setHoverBorder(false);
         this.lastHoverBorderKey = null;
       }
+      this.canvas.style.cursor = 'default';
       this.onDragEnd?.(this.dragFrom, coord);
       this.isDragging = false;
       this.dragFrom = null;
