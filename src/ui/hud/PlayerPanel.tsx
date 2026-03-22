@@ -54,6 +54,13 @@ export function PlayerPanel({ player, isActive }: PlayerPanelProps) {
       )}
 
       <div className="player-card__stat">
+        <span className="player-card__stat-label">Notoriety</span>
+        <span className="player-card__stat-value" style={{ color: 'var(--color-red)' }}>
+          {player.notoriety}
+        </span>
+      </div>
+
+      <div className="player-card__stat">
         <span className="player-card__stat-label">Doubloons</span>
         <span className="player-card__stat-value" style={{ color: 'var(--text-gold)' }}>
           {player.doubloons}
