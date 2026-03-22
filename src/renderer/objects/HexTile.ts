@@ -8,7 +8,7 @@ const COLORS: Record<HexHighlight, number> = {
   none: 0x6a8a9a,
   hover: 0x8aa0aa,
   selected: 0xd4a843,
-  valid: 0x7a9aaa,
+  valid: 0x8ab4a8,
   island: 0x8b7355,
 };
 

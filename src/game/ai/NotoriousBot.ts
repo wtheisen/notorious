@@ -5,6 +5,7 @@ import { HexCoord, hexEquals } from '../../types/CoordinateTypes';
 import { getPlayerShips, getHex, getHexController, getIslandByName, findPathOnBoard } from '../logic/BoardLogic';
 import { getValidNeighbors } from '../../config/HexConstants';
 import { TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
+import { getPowerStrategy } from '../../core/powers';
 
 /**
  * Enumerate all possible moves for the current game state
@@ -35,13 +36,20 @@ export function enumerateMoves(G: NotoriousState, ctx: any): any[] {
   // AI can place on any action - if it can't execute later, it's a missed action
   if (ctx.phase === 'place') {
     if (player.placedCaptains.length < player.captainCount) {
+      const power = getPowerStrategy(player.piratePower);
       const allActions = [
         ActionType.SAIL,
         ActionType.BUILD,
         ActionType.STEAL,
         ActionType.SINK,
         ActionType.CHART
-      ];
+      ].filter(a => {
+        if (a === ActionType.SINK && !power.canUseSink()) return false;
+        if (a === ActionType.STEAL && !power.canUseSteal()) return false;
+        if (a === ActionType.BUILD && !power.canUseBuild()) return false;
+        if (a === ActionType.CHART && !power.canUseChart()) return false;
+        return true;
+      });
 
       for (const action of allActions) {
         moves.push({ move: 'placeCaptain', args: [action] });

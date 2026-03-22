@@ -272,7 +272,14 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
     });
   }, [phase, moves, currentPlayer, handleExecuteAction]);
 
-  const instruction = getInstruction(mode, phase, currentPlayer, power);
+  let instruction = getInstruction(mode, phase, currentPlayer, power);
+  // Override instruction when a hex-selection mode has no valid targets
+  if (['steal_select_hex', 'sink_select_hex', 'build_select_hex'].includes(mode.type)) {
+    const highlights = getHighlightsForMode(mode, G, ctx.currentPlayer, currentPlayer);
+    if (highlights.valid.length === 0) {
+      instruction = 'No valid targets — cancel to choose another action';
+    }
+  }
   const isSailActive = mode.type === 'sail' || mode.type === 'sail_dragging';
   const sailHasQueuedMoves = (mode.type === 'sail' && mode.queuedMoves.length > 0);
 
