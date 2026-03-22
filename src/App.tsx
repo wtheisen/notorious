@@ -477,14 +477,41 @@ function LandingPage({ onStart }: { onStart: () => void }) {
 
 export function App() {
   const [started, setStarted] = useState(false);
+  const [gameKey, setGameKey] = useState(0);
+
+  // Warn before leaving during an active game
+  React.useEffect(() => {
+    if (!started) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [started]);
 
   if (!started) {
-    return <LandingPage onStart={() => setStarted(true)} />;
+    return <LandingPage onStart={() => { setStarted(true); setGameKey(k => k + 1); }} />;
   }
 
   return (
     <div className="game-root">
-      <NotoriousClient />
+      <button
+        onClick={() => setStarted(false)}
+        style={{
+          position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)',
+          zIndex: 50, padding: '4px 14px', fontSize: '0.65rem',
+          fontFamily: "'Cinzel', serif", letterSpacing: '0.08em',
+          background: 'rgba(139,115,85,0.2)', color: '#5c3a1e',
+          border: '1px solid rgba(139,115,85,0.4)', borderRadius: 4,
+          cursor: 'pointer', opacity: 0.7, transition: 'opacity 0.2s',
+        }}
+        onMouseEnter={e => (e.currentTarget.style.opacity = '1')}
+        onMouseLeave={e => (e.currentTarget.style.opacity = '0.7')}
+        title="Return to title screen"
+      >
+        Abandon Game
+      </button>
+      <NotoriousClient key={gameKey} />
     </div>
   );
 }

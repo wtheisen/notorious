@@ -88,7 +88,11 @@ export function getHighlightsForMode(
   const selected: string[] = [];
   const valid: string[] = [];
 
-  if (mode.type === 'sail') {
+  if (mode.type === 'setup') {
+    for (const [key, hex] of Object.entries(G.board.hexes)) {
+      if (!hex.island && hex.ships.length === 0) valid.push(key);
+    }
+  } else if (mode.type === 'sail') {
     for (const [key, hex] of Object.entries(G.board.hexes)) {
       if (hex.ships.some(s => s.playerId === currentPlayerId && s.type !== ShipType.PORT)) {
         valid.push(key);
