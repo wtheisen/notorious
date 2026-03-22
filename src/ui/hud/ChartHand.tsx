@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AnyChart } from '../../core/Chart';
-import { chartLabel, chartColor } from '../utils/chartFormatting';
+import { chartLabel, chartColor, chartDescription } from '../utils/chartFormatting';
 import './hud.css';
 
 interface ChartHandProps {
@@ -34,7 +34,8 @@ export function ChartHand({ charts }: ChartHandProps) {
               className="chart-card"
               style={{ borderLeft: `3px solid ${chartColor(chart)}`, marginBottom: 4 }}
             >
-              {chartLabel(chart)}
+              <div style={{ fontWeight: 'bold' }}>{chartLabel(chart)}</div>
+              <div style={{ fontSize: '0.75em', opacity: 0.8, marginTop: 2 }}>{chartDescription(chart)}</div>
             </div>
           ))}
         </div>

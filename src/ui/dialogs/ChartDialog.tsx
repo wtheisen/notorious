@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { AnyChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
-import { ChartType } from '../../types/GameTypes';
-import { chartLabel, chartColor } from '../utils/chartFormatting';
+import { AnyChart } from '../../core/Chart';
+import { chartLabel, chartColor, chartDescription } from '../utils/chartFormatting';
 
 interface ChartDialogProps {
   drawnCharts: AnyChart[];
@@ -11,22 +10,6 @@ interface ChartDialogProps {
   onCancel: () => void;
 }
 
-function chartDescription(chart: AnyChart): string {
-  switch (chart.type) {
-    case ChartType.TREASURE_MAP:
-      return 'Control this hex to claim 1 doubloon per player';
-    case ChartType.ISLAND_RAID: {
-      const raid = chart as IslandRaidChart;
-      return `Control ${raid.targetIsland} to claim 4 notoriety + ${raid.doubloonsOnChart} doubloons`;
-    }
-    case ChartType.SMUGGLER_ROUTE: {
-      const route = chart as SmugglerRouteChart;
-      return `Connect ${route.islandA} to ${route.islandB} with your ships for doubloons`;
-    }
-    default:
-      return '';
-  }
-}
 
 export function ChartDialog({ drawnCharts, keepCount: baseKeepCount, maxDoubloons, onConfirm, onCancel }: ChartDialogProps) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
