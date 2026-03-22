@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
+import { AnyChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
 import { ChartType } from '../../types/GameTypes';
+import { chartLabel, chartColor } from '../utils/chartFormatting';
 
 interface ChartDialogProps {
   drawnCharts: AnyChart[];
@@ -8,19 +9,6 @@ interface ChartDialogProps {
   maxDoubloons: number;
   onConfirm: (selectedIds: string[], bribeChoices: ('draw' | 'keep')[]) => void;
   onCancel: () => void;
-}
-
-function chartLabel(chart: AnyChart): string {
-  switch (chart.type) {
-    case ChartType.TREASURE_MAP:
-      return `Treasure Map (${(chart as TreasureMapChart).targetHex.q},${(chart as TreasureMapChart).targetHex.r})`;
-    case ChartType.ISLAND_RAID:
-      return `Island Raid: ${(chart as IslandRaidChart).targetIsland}`;
-    case ChartType.SMUGGLER_ROUTE:
-      return `Smuggler Route: ${(chart as SmugglerRouteChart).islandA} — ${(chart as SmugglerRouteChart).islandB}`;
-    default:
-      return 'Unknown Chart';
-  }
 }
 
 function chartDescription(chart: AnyChart): string {
@@ -37,15 +25,6 @@ function chartDescription(chart: AnyChart): string {
     }
     default:
       return '';
-  }
-}
-
-function chartColor(chart: AnyChart): string {
-  switch (chart.type) {
-    case ChartType.TREASURE_MAP: return '#b8963e';
-    case ChartType.ISLAND_RAID: return '#8b2500';
-    case ChartType.SMUGGLER_ROUTE: return '#4a6a5a';
-    default: return '#8b7355';
   }
 }
 

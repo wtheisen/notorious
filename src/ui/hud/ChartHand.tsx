@@ -1,29 +1,7 @@
 import React, { useState } from 'react';
-import { AnyChart, TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
-import { ChartType } from '../../types/GameTypes';
+import { AnyChart } from '../../core/Chart';
+import { chartLabel, chartColor } from '../utils/chartFormatting';
 import './hud.css';
-
-function chartLabel(chart: AnyChart): string {
-  switch (chart.type) {
-    case ChartType.TREASURE_MAP:
-      return `Treasure Map (${(chart as TreasureMapChart).targetHex.q},${(chart as TreasureMapChart).targetHex.r})`;
-    case ChartType.ISLAND_RAID:
-      return `Island Raid: ${(chart as IslandRaidChart).targetIsland}`;
-    case ChartType.SMUGGLER_ROUTE:
-      return `Route: ${(chart as SmugglerRouteChart).islandA} — ${(chart as SmugglerRouteChart).islandB}`;
-    default:
-      return 'Chart';
-  }
-}
-
-function chartColor(chart: AnyChart): string {
-  switch (chart.type) {
-    case ChartType.TREASURE_MAP: return '#c4a43a';
-    case ChartType.ISLAND_RAID: return '#cc4444';
-    case ChartType.SMUGGLER_ROUTE: return '#4488cc';
-    default: return '#888';
-  }
-}
 
 interface ChartHandProps {
   charts: AnyChart[];

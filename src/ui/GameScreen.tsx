@@ -19,6 +19,7 @@ import { BuildDialog } from './dialogs/BuildDialog';
 import { PiratePower } from '../types/GameTypes';
 import { ChartHand } from './hud/ChartHand';
 import { ScoreTrack } from './hud/ScoreTrack';
+import { chartLabel, chartColor } from './utils/chartFormatting';
 import { MobilePlayerDrawer } from './hud/MobilePlayerDrawer';
 import { useMobile } from './hooks/useMobile';
 import { pickAIMove } from '../game/ai/AIPlayer';
@@ -82,6 +83,14 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
 
   // Reset on phase/turn change
   useEffect(() => {
+    // Release any in-progress drag state
+    const renderer = rendererRef.current;
+    if (renderer) {
+      renderer.setDragLock(false);
+      renderer.clearPendingMoves();
+    }
+    dragShipRef.current = null;
+
     if (phase === 'setup') setMode({ type: 'setup' });
     else if (phase === 'place') { setMode({ type: 'place_captain' }); setSelectedAction(null); }
     else if (phase === 'play') { setMode({ type: 'idle' }); setSelectedAction(null); }
@@ -411,17 +420,22 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
         );
       })()}
 
-      {hoveredHex && (
-        <div className="hex-info" style={{
-          position: 'absolute',
-          bottom: isSailActive ? 70 : (phase === 'place' || phase === 'play' ? 80 : 12),
-          left: 14,
-        }}>
-          {hoveredHex}
-          {G.board.hexes[hoveredHex]?.island && ` · ${G.board.hexes[hoveredHex].island!.name}`}
-          {G.board.hexes[hoveredHex]?.ships.length > 0 && ` · ${G.board.hexes[hoveredHex].ships.length} ship${G.board.hexes[hoveredHex].ships.length > 1 ? 's' : ''}`}
-        </div>
-      )}
+      {hoveredHex && (() => {
+        const hex = G.board.hexes[hoveredHex];
+        const parts: string[] = [];
+        if (hex?.island) parts.push(hex.island.name);
+        if (hex?.ships.length) parts.push(`${hex.ships.length} ship${hex.ships.length > 1 ? 's' : ''}`);
+        if (parts.length === 0) return null;
+        return (
+          <div className="hex-info" style={{
+            position: 'absolute',
+            bottom: isSailActive ? 70 : (phase === 'place' || phase === 'play' ? 80 : 12),
+            left: 14,
+          }}>
+            {parts.join(' · ')}
+          </div>
+        );
+      })()}
 
       {/* Pirate phase controls */}
       {mode.type === 'pirate' && (
@@ -444,33 +458,38 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
             </button>
           </div>
 
-          {currentPlayer.charts.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <div className="pirate-panel__section-label">Your charts</div>
-              {currentPlayer.charts.map(chart => (
-                <div key={chart.id} className="claim-row"
-                  style={{ borderLeft: `3px solid ${chart.type === 'TREASURE_MAP' ? '#c4a43a' : chart.type === 'SMUGGLER_ROUTE' ? '#4488cc' : '#cc4444'}` }}>
-                  <span>
-                    {chart.type === 'TREASURE_MAP' && `Treasure Map (${(chart as any).targetHex.q},${(chart as any).targetHex.r})`}
-                    {chart.type === 'SMUGGLER_ROUTE' && `Route: ${(chart as any).islandA} — ${(chart as any).islandB}`}
-                    {chart.type === 'ISLAND_RAID' && `Raid: ${(chart as any).targetIsland}`}
-                  </span>
-                  <button className="hud-btn hud-btn--confirm claim-btn"
-                    onClick={() => moves.claimChart({ chartId: chart.id })}>
-                    Claim
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+          {currentPlayer.charts.length > 0 && (() => {
+            // Check if player has any galleon on the board (minimum requirement to claim)
+            const hasGalleonOnBoard = Object.values(G.board.hexes).some(hex =>
+              hex.ships.some(s => s.playerId === ctx.currentPlayer && s.type === 'GALLEON')
+            );
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <div className="pirate-panel__section-label">Your charts</div>
+                {currentPlayer.charts.map(chart => (
+                  <div key={chart.id} className="claim-row"
+                    style={{ borderLeft: `3px solid ${chartColor(chart)}` }}>
+                    <span>{chartLabel(chart)}</span>
+                    <button
+                      className={`hud-btn claim-btn ${hasGalleonOnBoard ? 'hud-btn--confirm' : ''}`}
+                      disabled={!hasGalleonOnBoard}
+                      title={hasGalleonOnBoard ? 'Claim this chart' : 'Need a galleon on the board to claim'}
+                      onClick={() => moves.claimChart({ chartId: chart.id })}>
+                      Claim
+                    </button>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {G.chartDeck.islandRaids.length > 0 && (() => {
             const maxNot = Math.max(...G.players.map(p => p.notoriety));
             return (
               <div>
                 <div className="pirate-panel__section-label">Island Raids</div>
-                {G.chartDeck.islandRaids.map((raid, idx) => {
-                  const threshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[idx] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+                {G.chartDeck.islandRaids.map((raid) => {
+                  const threshold = (raid as any).claimThreshold ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
                   const claimable = maxNot >= threshold;
                   return (
                     <div key={raid.id} className="claim-row" style={{
@@ -527,7 +546,7 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
                     border: windTokenPos === i ? '2px solid #b8963e' : '1px solid #8b7355',
                     color: '#3b2a1a',
                   }}>
-                  {i}–{(i + 1) % G.players.length}
+                  {G.players[i].name.charAt(0)}–{G.players[(i + 1) % G.players.length].name.charAt(0)}
                 </button>
               ))}
             </div>
