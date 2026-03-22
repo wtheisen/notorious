@@ -55,19 +55,15 @@ export class IslandPlacer {
    * @returns Object containing placed islands and remaining Treasure Maps
    */
   placeIslands(board: PlaceableBoard): { islands: Island[]; remainingTreasureMaps: TreasureMapChart[] } {
-    console.log('[IslandPlacer] Starting island placement');
 
     // 1. Create 19 Treasure Maps (one for each hex on the board)
     const allTreasureMaps = this.createAllTreasureMaps();
-    console.log(`[IslandPlacer] Created ${allTreasureMaps.length} Treasure Maps`);
 
     // 2. Shuffle them
     const shuffledMaps = this.shuffle(allTreasureMaps);
-    console.log('[IslandPlacer] Shuffled Treasure Maps');
 
     // 3. Take first 5 for island placement
     const placementMaps = shuffledMaps.slice(0, 5);
-    console.log(`[IslandPlacer] Selected ${placementMaps.length} hexes for islands`);
 
     // 4. Shuffle island definitions to randomize which island goes where
     const shuffledIslandDefs = this.shuffle([...ISLAND_DEFINITIONS]);
@@ -83,12 +79,10 @@ export class IslandPlacer {
       board.placeIsland(island);
       islands.push(island);
 
-      console.log(`[IslandPlacer] Placed ${island.name} at (${island.hexCoord.q}, ${island.hexCoord.r})`);
     }
 
     // 6. Return remaining 14 Treasure Maps (these go into the chart deck)
     const remainingTreasureMaps = shuffledMaps.slice(5);
-    console.log(`[IslandPlacer] Returning ${remainingTreasureMaps.length} Treasure Maps for deck`);
 
     return {
       islands,
@@ -118,7 +112,6 @@ export class IslandPlacer {
       throw new Error('Must provide exactly 5 hex indices');
     }
 
-    console.log('[IslandPlacer] Placing islands at specific positions:', hexIndices);
 
     const allTreasureMaps = this.createAllTreasureMaps();
     const islands: Island[] = [];

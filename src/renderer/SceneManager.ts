@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { CameraController } from './CameraController';
 import { HexGrid } from './objects/HexGrid';
-import { WaterPlane } from './objects/WaterPlane';
+
 import { ActionSpaces } from './objects/ActionSpaces';
 
 export type QualityTier = 'high' | 'low';
@@ -11,7 +11,6 @@ export class SceneManager {
   readonly scene: THREE.Scene;
   readonly cameraController: CameraController;
   readonly hexGrid: HexGrid;
-  readonly water: WaterPlane;
   readonly actionSpaces: ActionSpaces;
 
   private clock = new THREE.Clock();
@@ -74,9 +73,6 @@ export class SceneManager {
     this.hexGrid = new HexGrid();
     this.scene.add(this.hexGrid.group);
 
-    // Water (disabled for now)
-    this.water = new WaterPlane();
-
     // Action spaces (below the board)
     this.actionSpaces = new ActionSpaces();
     this.scene.add(this.actionSpaces.group);
@@ -101,7 +97,6 @@ export class SceneManager {
       const elapsed = this.clock.getElapsedTime();
 
       this.cameraController.update();
-      this.water.update(elapsed);
       this.hexGrid.getWrapGlow().update(elapsed);
 
       for (const cb of this.onFrameCallbacks) {

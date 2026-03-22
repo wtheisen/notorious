@@ -130,7 +130,22 @@ export class GameRenderer {
     }
   }
 
+  private lastShipFingerprint = '';
+
+  private buildShipFingerprint(G: NotoriousState): string {
+    const parts: string[] = [];
+    for (const [key, hex] of Object.entries(G.board.hexes)) {
+      if (hex.ships.length === 0) continue;
+      parts.push(key + ':' + hex.ships.map(s => s.playerId + s.type).join(','));
+    }
+    return parts.join(';');
+  }
+
   private syncShips(G: NotoriousState) {
+    const fingerprint = this.buildShipFingerprint(G);
+    if (fingerprint === this.lastShipFingerprint) return;
+    this.lastShipFingerprint = fingerprint;
+
     for (const ships of this.shipMeshes.values()) {
       for (const ship of ships) {
         this.shipGroup.remove(ship.mesh);

@@ -8,12 +8,10 @@ import { AnyChart } from '../../core/Chart';
  */
 export function placeCaptain(player: PlayerState, action: ActionType): boolean {
   if (player.placedCaptains.length >= player.captainCount) {
-    console.log(`[Player] ${player.name} cannot place captain - already placed ${player.placedCaptains.length}/${player.captainCount}`);
     return false;
   }
 
   player.placedCaptains.push(action);
-  console.log(`[Player] ${player.name} placed captain on ${action}. Total: ${player.placedCaptains.length}/${player.captainCount}`);
   return true;
 }
 
@@ -54,7 +52,6 @@ export function gainNotoriety(player: PlayerState, amount: number): void {
   GAME_CONSTANTS.CAPTAIN_UNLOCK_THRESHOLDS.forEach(threshold => {
     if (oldNotoriety < threshold && player.notoriety >= threshold) {
       player.captainCount++;
-      console.log(`[Player] ${player.name} unlocked captain! Now has ${player.captainCount} captains`);
     }
   });
 }
@@ -129,7 +126,6 @@ export function setPortLocation(player: PlayerState, coord: { q: number; r: numb
  */
 export function addChart(player: PlayerState, chart: AnyChart): void {
   player.charts.push(chart);
-  console.log(`[Player] ${player.name} gained chart: ${chart.type}`);
 }
 
 /**
@@ -140,7 +136,6 @@ export function removeChart(player: PlayerState, chartId: string): boolean {
   const index = player.charts.findIndex(c => c.id === chartId);
   if (index !== -1) {
     const removed = player.charts.splice(index, 1)[0];
-    console.log(`[Player] ${player.name} removed chart: ${removed.type}`);
     return true;
   }
   return false;
