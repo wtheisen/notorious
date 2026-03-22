@@ -152,7 +152,6 @@ export const NotoriousGame: Game<NotoriousState> = {
    * Initialize the game state
    */
   setup: ({ ctx, random }): NotoriousState => {
-    console.log('[NotoriousGame] Setting up game');
 
     // Randomly assign pirate powers to players
     const allPowers = [
@@ -167,7 +166,6 @@ export const NotoriousGame: Game<NotoriousState> = {
     const players: PlayerState[] = ctx.playOrder.map((id, index) => {
       const colors = [PlayerColor.BLUE, PlayerColor.RED, PlayerColor.GREEN, PlayerColor.YELLOW];
       const power = shuffledPowers[index % shuffledPowers.length];
-      console.log(`[NotoriousGame] Player ${index + 1} assigned power: ${power}`);
       const isAIPlayer = index > 0; // Player 2+ are AI controlled
       return {
         id,
@@ -215,14 +213,13 @@ export const NotoriousGame: Game<NotoriousState> = {
 
     const { islands: placedIslands, remainingTreasureMaps } = islandPlacer.placeIslands(boardAdapter as any);
 
-    console.log(`[NotoriousGame] Placed ${islands.length} islands`);
 
     // Initialize chart deck
     const allSmugglerRoutes = ChartFactory.createAllSmugglerRoutes();
     const shuffledIslands = random!.Shuffle([...islands]);
     const allIslandRaids = [
-      ChartFactory.createIslandRaid(shuffledIslands[0].name as any),
-      ChartFactory.createIslandRaid(shuffledIslands[1].name as any)
+      ChartFactory.createIslandRaid(shuffledIslands[0].name as any, GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0]),
+      ChartFactory.createIslandRaid(shuffledIslands[1].name as any, GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[1])
     ];
 
     // Create shuffled draw pile from treasure maps and smuggler routes
@@ -266,7 +263,6 @@ export const NotoriousGame: Game<NotoriousState> = {
       start: true,
 
       onBegin: ({ G }) => {
-        console.log('[SETUP] Phase started - snake draft placement');
       },
 
       turn: {
@@ -301,14 +297,11 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Must not have placed port yet
           if (player.portLocation) {
-            console.log('[SETUP] Port already placed');
             return INVALID_MOVE;
           }
 
           const hexState = getHex(G.board, hex);
           if (!hexState) return INVALID_MOVE;
-          if (hexState.island) { console.log('[SETUP] Cannot place on island'); return INVALID_MOVE; }
-          if (hexState.ships.length > 0) { console.log('[SETUP] Hex occupied'); return INVALID_MOVE; }
 
           // Place port
           setPortLocation(player, hex);
@@ -322,7 +315,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           G.setupPlacements[playerIndex]++;
           if (G.setupPlacements[playerIndex] >= 2) G.setupComplete[playerIndex] = true;
 
-          console.log(`[SETUP] Player ${playerIndex + 1} placed port at (${hex.q},${hex.r}) with 2 sloops`);
           events?.endTurn();
         },
 
@@ -335,21 +327,17 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Must have already placed port
           if (!player.portLocation) {
-            console.log('[SETUP] Must place port first');
             return INVALID_MOVE;
           }
 
           // Must not have completed setup yet
           if (G.setupComplete[playerIndex]) {
-            console.log('[SETUP] Already completed setup');
             return INVALID_MOVE;
           }
 
           const hexState = getHex(G.board, hex);
           if (!hexState) return INVALID_MOVE;
-          if (hexState.island) { console.log('[SETUP] Cannot place on island'); return INVALID_MOVE; }
 
-          if (hexState.ships.length > 0) { console.log('[SETUP] Hex occupied'); return INVALID_MOVE; }
 
           // Place galleon + 2 sloops
           placeShip(G.board, hex, { type: ShipType.GALLEON, playerId: ctx.currentPlayer });
@@ -361,7 +349,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           G.setupPlacements[playerIndex]++;
           G.setupComplete[playerIndex] = true;
 
-          console.log(`[SETUP] Player ${playerIndex + 1} placed galleon at (${hex.q},${hex.r}) with 2 sloops`);
           events?.endTurn();
         },
       },
@@ -376,7 +363,6 @@ export const NotoriousGame: Game<NotoriousState> = {
     // PLACE PHASE: Players place captains on action slots (round-robin, one at a time)
     place: {
       onBegin: ({ G }) => {
-        console.log('[PLACE] Phase started');
         // Reset all players' captain placements for new round
         G.players.forEach(p => p.placedCaptains = []);
       },
@@ -416,7 +402,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             return INVALID_MOVE;
           }
 
-          console.log(`[PLACE] Player ${parseInt(ctx.currentPlayer) + 1} placed captain on ${actionType}`);
 
           // End turn after placing ONE captain - advances to next player
           events?.endTurn();
@@ -433,7 +418,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
     play: {
       onBegin: ({ G }) => {
-        console.log('[PLAY] Phase started');
       },
 
       turn: {
@@ -509,13 +493,11 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Validate bribes match what's needed
           if (moveData.bribesUsed < bribesNeeded) {
-            console.log(`[SAIL] Need ${bribesNeeded} bribes for ${totalMovementPoints} movement points, only ${moveData.bribesUsed} provided`);
             return INVALID_MOVE;
           }
 
           // Validate player has enough doubloons
           if (moveData.bribesUsed > player.doubloons) {
-            console.log('[SAIL] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
 
@@ -531,7 +513,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             const toHex = getHex(G.board, move.to);
 
             if (!fromHex || !toHex) {
-              console.log('[SAIL] Invalid hex coordinates');
               return INVALID_MOVE;
             }
 
@@ -539,21 +520,17 @@ export const NotoriousGame: Game<NotoriousState> = {
             const playerShips = getPlayerShips(G.board, move.from, ctx.currentPlayer);
             const hasShip = playerShips.some(s => s.type === move.shipType);
             if (!hasShip) {
-              console.log(`[SAIL] No ${move.shipType} at source hex`);
               return INVALID_MOVE;
             }
 
             // Check path is valid (boardDistance handles wrapping)
             const distance = boardDistance(move.from, move.to, maxDistance);
             if (distance === 0) {
-              console.log('[SAIL] Cannot sail to same hex');
               return INVALID_MOVE;
             } else if (distance > maxDistance || distance === Infinity) {
-              console.log(`[SAIL] Move distance too far (max ${maxDistance} for ${player.piratePower})`);
               return INVALID_MOVE;
             } else if (distance === 1) {
               if (!canSailForPlayer(move.from, move.to)) {
-                console.log('[SAIL] Cannot sail between hexes (blocked by island edge)');
                 return INVALID_MOVE;
               }
             } else {
@@ -576,7 +553,6 @@ export const NotoriousGame: Game<NotoriousState> = {
                 return false;
               });
               if (!validPath) {
-                console.log(`[SAIL] No valid ${distance}-hex path found`);
                 return INVALID_MOVE;
               }
             }
@@ -595,7 +571,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             placeShip(G.board, move.to, ship);
           }
 
-          console.log(`[SAIL] Moved ${moveData.moves.length} ship(s)`);
 
           // Remove captain
           player.placedCaptains.splice(captainIndex, 1);
@@ -622,7 +597,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Can only place 1 Galleon (bribes only add Sloops)
           if (galleonsToPlace > 1) {
-            console.log('[BUILD] Can only place 1 Galleon per action');
             return INVALID_MOVE;
           }
 
@@ -638,19 +612,16 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Validate bribes match what's needed
           if (buildData.bribesUsed < bribesNeeded) {
-            console.log(`[BUILD] Need ${bribesNeeded} bribes, only ${buildData.bribesUsed} provided`);
             return INVALID_MOVE;
           }
 
           // Validate player has enough doubloons
           if (buildData.bribesUsed > player.doubloons) {
-            console.log('[BUILD] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
 
           const hex = getHex(G.board, buildData.hex);
           if (!hex) {
-            console.log('[BUILD] Invalid hex coordinate');
             return INVALID_MOVE;
           }
 
@@ -661,7 +632,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             hexEquals(player.portLocation, buildData.hex);
 
           if (!hasPlayerPieces && !isPortHex) {
-            console.log('[BUILD] Must build in hex with your pieces or port');
             return INVALID_MOVE;
           }
 
@@ -669,7 +639,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           const allShips = hex.ships;
           const hasEnemyPieces = allShips.some(s => s.playerId !== ctx.currentPlayer);
           if (hasEnemyPieces && !isPortHex) {
-            console.log('[BUILD] Cannot build in hex with enemy pieces (except port)');
             return INVALID_MOVE;
           }
 
@@ -678,11 +647,9 @@ export const NotoriousGame: Game<NotoriousState> = {
           const galleonsNeeded = buildData.placements.filter(s => s === ShipType.GALLEON).length;
 
           if (!hasShips(player, 'sloops', sloopsNeeded)) {
-            console.log('[BUILD] Not enough sloops in inventory');
             return INVALID_MOVE;
           }
           if (!hasShips(player, 'galleons', galleonsNeeded)) {
-            console.log('[BUILD] Not enough galleons in inventory');
             return INVALID_MOVE;
           }
 
@@ -703,7 +670,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
           }
 
-          console.log(`[BUILD] Placed ${buildData.placements.length} ship(s)`);
 
           // Remove captain
           player.placedCaptains.splice(captainIndex, 1);
@@ -725,14 +691,17 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           const hex = getHex(G.board, stealData.hex);
           if (!hex) {
-            console.log('[STEAL] Invalid hex coordinate');
             return INVALID_MOVE;
           }
 
           // Check player has at least one piece in this hex
           const playerShips = getPlayerShips(G.board, stealData.hex, ctx.currentPlayer);
           if (playerShips.length === 0) {
-            console.log('[STEAL] You have no pieces in this hex');
+            return INVALID_MOVE;
+          }
+
+          // Cannot steal from yourself
+          if (stealData.targetPlayerId === ctx.currentPlayer) {
             return INVALID_MOVE;
           }
 
@@ -740,13 +709,11 @@ export const NotoriousGame: Game<NotoriousState> = {
           const targetShips = getPlayerShips(G.board, stealData.hex, stealData.targetPlayerId);
           const hasSloop = targetShips.some(s => s.type === ShipType.SLOOP);
           if (!hasSloop) {
-            console.log('[STEAL] Target has no sloop in this hex');
             return INVALID_MOVE;
           }
 
           // Check player has a sloop to place (if they want to replace)
           if (stealData.replaceWithSloop && !hasShips(player, 'sloops', 1)) {
-            console.log('[STEAL] No sloop to place as replacement');
             return INVALID_MOVE;
           }
 
@@ -771,7 +738,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             spendShips(player, 'sloops', 1);
           }
 
-          console.log(`[STEAL] Stole sloop from player ${stealData.targetPlayerId}`);
 
           player.placedCaptains.splice(captainIndex, 1);
           events?.endTurn();
@@ -792,7 +758,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Check if power allows SINK action (e.g., The Peaceful cannot)
           if (!power.canUseSink()) {
-            console.log('[SINK] Power prevents using Sink action');
             return INVALID_MOVE;
           }
 
@@ -813,7 +778,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Validate bribes
           if (totalBribesNeeded > player.doubloons) {
-            console.log(`[SINK] Need ${totalBribesNeeded} doubloons, only have ${player.doubloons}`);
             return INVALID_MOVE;
           }
 
@@ -823,12 +787,10 @@ export const NotoriousGame: Game<NotoriousState> = {
             const toHex = getHex(G.board, sloopMove.to);
 
             if (!fromHex || !toHex) {
-              console.log('[SINK] Invalid sloop movement hexes');
               return INVALID_MOVE;
             }
 
             if (!canSailBetween(G.board, sloopMove.from, sloopMove.to)) {
-              console.log('[SINK] Cannot move sloop along this path');
               return INVALID_MOVE;
             }
 
@@ -837,7 +799,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           const hex = getHex(G.board, sinkData.hex);
           if (!hex) {
-            console.log('[SINK] Invalid hex coordinate');
             return INVALID_MOVE;
           }
 
@@ -853,7 +814,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           }
 
           if (!playerHasPiecesAtTarget) {
-            console.log('[SINK] You have no pieces in target hex');
             return INVALID_MOVE;
           }
 
@@ -862,6 +822,11 @@ export const NotoriousGame: Game<NotoriousState> = {
             { shipType: sinkData.targetShipType, playerId: sinkData.targetPlayerId },
             ...(sinkData.additionalSinks || [])
           ];
+
+          // Cannot sink your own ships
+          if (allShipsToSink.some(t => t.playerId === ctx.currentPlayer)) {
+            return INVALID_MOVE;
+          }
 
           // Validate all target ships exist
           for (const target of allShipsToSink) {
@@ -872,16 +837,14 @@ export const NotoriousGame: Game<NotoriousState> = {
             ).length;
 
             if (shipCount < neededCount) {
-              console.log(`[SINK] Not enough ${target.shipType}s from player ${target.playerId} to sink`);
               return INVALID_MOVE;
             }
 
-            // If sinking a Galleon, check influence requirement
+            // If sinking a Galleon, must have strict influence majority
             if (target.shipType === ShipType.GALLEON) {
               const playerInfluence = getInfluence(G.board, sinkData.hex, ctx.currentPlayer);
               const targetInfluence = getInfluence(G.board, sinkData.hex, target.playerId);
-              if (playerInfluence < targetInfluence) {
-                console.log('[SINK] Not enough influence to sink Galleon');
+              if (playerInfluence <= targetInfluence) {
                 return INVALID_MOVE;
               }
             }
@@ -897,7 +860,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             const sloop: Ship = { type: ShipType.SLOOP, playerId: ctx.currentPlayer };
             removeShip(G.board, sloopMove.from, sloop);
             placeShip(G.board, sloopMove.to, sloop);
-            console.log(`[SINK] Moved sloop from (${sloopMove.from.q},${sloopMove.from.r}) to (${sloopMove.to.q},${sloopMove.to.r})`);
           }
 
           // Execute: sink all target ships
@@ -928,7 +890,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             }
           }
 
-          console.log(`[SINK] Sank ${allShipsToSink.length} ship(s), gained ${totalNotorietyGained} notoriety`);
 
           player.placedCaptains.splice(captainIndex, 1);
           events?.endTurn();
@@ -961,13 +922,11 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Validate: can't keep more than you draw
           if (keepCount > drawCount) {
-            console.log('[CHART] Cannot keep more charts than drawn');
             return INVALID_MOVE;
           }
 
           // Validate bribes
           if (bribesUsed > player.doubloons) {
-            console.log('[CHART] Not enough doubloons for bribes');
             return INVALID_MOVE;
           }
 
@@ -984,9 +943,10 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // If selection has been made, finalize the action
           if (chartData.selectedChartIds && chartData.selectedChartIds.length > 0) {
-            // Validate selection count
-            if (chartData.selectedChartIds.length !== keepCount) {
-              console.log(`[CHART] Must select exactly ${keepCount} chart(s) to keep`);
+            // Validate selection count (allow keeping fewer if deck ran out)
+            const availableCards = G.chartDeck.drawPile.length + G.chartDeck.discardPile.length;
+            const maxKeep = Math.min(keepCount, Math.min(drawCount, availableCards));
+            if (chartData.selectedChartIds.length > maxKeep) {
               return INVALID_MOVE;
             }
 
@@ -995,8 +955,9 @@ export const NotoriousGame: Game<NotoriousState> = {
               spendDoubloons(player, bribesUsed);
             }
 
-            // Draw charts from the deck
-            const drawnCharts = G.chartDeck.drawPile.splice(0, drawCount);
+            // Draw charts from the deck (cap to available cards after reshuffle)
+            const actualDraw = Math.min(drawCount, G.chartDeck.drawPile.length);
+            const drawnCharts = G.chartDeck.drawPile.splice(0, actualDraw);
 
             // Sort into keep and discard based on selection
             for (const chart of drawnCharts) {
@@ -1010,14 +971,12 @@ export const NotoriousGame: Game<NotoriousState> = {
             // Give the Wind token
             G.windToken.holder = ctx.currentPlayer;
 
-            console.log(`[CHART] Drew ${drawCount}, kept ${keepCount}. Player now holds Wind token`);
 
             player.placedCaptains.splice(captainIndex, 1);
             events?.endTurn();
           } else {
             // No selection made - this is a problem in a real game
             // For now, auto-select the first N charts
-            console.log('[CHART] No chart selection provided - auto-selecting first charts');
 
             // Execute: spend doubloons for bribes
             if (bribesUsed > 0) {
@@ -1041,7 +1000,6 @@ export const NotoriousGame: Game<NotoriousState> = {
             // Give the Wind token
             G.windToken.holder = ctx.currentPlayer;
 
-            console.log(`[CHART] Drew ${actualDrawCount}, kept ${actualKeepCount}. Player now holds Wind token`);
 
             player.placedCaptains.splice(captainIndex, 1);
             events?.endTurn();
@@ -1061,7 +1019,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
           // Remove the captain (forfeit the action)
           const skippedAction = player.placedCaptains.pop();
-          console.log(`[SKIP] Player ${parseInt(ctx.currentPlayer) + 1} forfeited ${skippedAction} action (no valid targets)`);
 
           events?.endTurn();
         },
@@ -1091,7 +1048,6 @@ export const NotoriousGame: Game<NotoriousState> = {
 
     pirate: {
       onBegin: ({ G, ctx, events }) => {
-        console.log('[PIRATE] Phase started');
 
         // Reset pirate phase turn tracker
         G.piratePhaseTurnsComplete = 0;
@@ -1105,7 +1061,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           const power = getPowerStrategy(player.piratePower);
           const notoriety = power.modifyHexControlNotoriety(baseNotoriety);
 
-          console.log(`[PIRATE] ${player.name} (${power.name}): controls ${baseNotoriety} hex(es), gains ${notoriety} notoriety`);
 
           if (notoriety > 0) {
             gainNotoriety(player, notoriety);
@@ -1124,14 +1079,12 @@ export const NotoriousGame: Game<NotoriousState> = {
         if (maxNotoriety >= GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0] && G.chartDeck.hiddenIslandRaids.length > 0) {
           const raid = G.chartDeck.hiddenIslandRaids.shift()!;
           G.chartDeck.islandRaids.push(raid);
-          console.log(`[PIRATE] Player reached ${GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0]} notoriety - 2nd Island Raid revealed: ${(raid as any).targetIsland}`);
         }
 
         // Check if game end is triggered (someone reached 24)
         // Don't end immediately - finish the round first
         if (!G.gameEndTriggered && G.players.some(p => hasPlayerWon(p))) {
           G.gameEndTriggered = true;
-          console.log('[PIRATE] Game end triggered! Finishing round...');
         }
       },
 
@@ -1151,13 +1104,11 @@ export const NotoriousGame: Game<NotoriousState> = {
          */
         setWindToken: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }, data: SetWindTokenData) => {
           if (G.windToken.holder !== ctx.currentPlayer) {
-            console.log('[WIND] Not the wind token holder');
             return INVALID_MOVE;
           }
 
           // Validate position
           if (data.newPosition < 0 || data.newPosition >= ctx.numPlayers) {
-            console.log('[WIND] Invalid token position');
             return INVALID_MOVE;
           }
 
@@ -1166,7 +1117,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           }
           G.windToken.position = data.newPosition;
 
-          console.log(`[WIND] Player ${parseInt(ctx.currentPlayer) + 1} set wind token: position=${data.newPosition}, flip=${data.flip}, direction=${G.windToken.placeDirection}`);
         },
 
         /**
@@ -1187,7 +1137,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           }
 
           if (!chart) {
-            console.log('[CLAIM] Chart not found');
             return INVALID_MOVE;
           }
 
@@ -1197,7 +1146,6 @@ export const NotoriousGame: Game<NotoriousState> = {
               const treasureMap = chart as TreasureMapChart;
               const hex = getHex(G.board, treasureMap.targetHex);
               if (!hex) {
-                console.log('[CLAIM] Target hex not found');
                 return INVALID_MOVE;
               }
 
@@ -1205,21 +1153,18 @@ export const NotoriousGame: Game<NotoriousState> = {
               const playerShips = getPlayerShips(G.board, treasureMap.targetHex, ctx.currentPlayer);
               const hasGalleon = playerShips.some(s => s.type === ShipType.GALLEON);
               if (!hasGalleon) {
-                console.log('[CLAIM] Need a Galleon at target hex');
                 return INVALID_MOVE;
               }
 
               // Must control the hex
               const controller = getHexController(G.board, treasureMap.targetHex);
               if (controller !== ctx.currentPlayer) {
-                console.log('[CLAIM] Must control the target hex');
                 return INVALID_MOVE;
               }
 
               // Award reward: 1 doubloon per player
               const reward = G.players.length;
               gainDoubloons(player, reward);
-              console.log(`[CLAIM] Claimed Treasure Map: +${reward} doubloons`);
               break;
             }
 
@@ -1227,13 +1172,11 @@ export const NotoriousGame: Game<NotoriousState> = {
               const islandRaid = chart as IslandRaidChart;
               const island = getIslandByName(G.board, islandRaid.targetIsland);
               if (!island) {
-                console.log('[CLAIM] Target island not found');
                 return INVALID_MOVE;
               }
 
               const hex = getHex(G.board, island.hexCoord);
               if (!hex) {
-                console.log('[CLAIM] Island hex not found');
                 return INVALID_MOVE;
               }
 
@@ -1241,30 +1184,25 @@ export const NotoriousGame: Game<NotoriousState> = {
               const playerShips = getPlayerShips(G.board, island.hexCoord, ctx.currentPlayer);
               const hasGalleon = playerShips.some(s => s.type === ShipType.GALLEON);
               if (!hasGalleon) {
-                console.log('[CLAIM] Need a Galleon on the island');
                 return INVALID_MOVE;
               }
 
               // Must control the island
               const controller = getHexController(G.board, island.hexCoord);
               if (controller !== ctx.currentPlayer) {
-                console.log('[CLAIM] Must control the island');
                 return INVALID_MOVE;
               }
 
               // Island Raids are only claimable once the notoriety threshold is reached
-              const raidIndex = G.chartDeck.islandRaids.findIndex(r => r.id === claimData.chartId);
-              const raidThreshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[raidIndex] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+              const raidThreshold = islandRaid.claimThreshold;
               const currentMaxNotoriety = Math.max(...G.players.map(p => p.notoriety));
               if (currentMaxNotoriety < raidThreshold) {
-                console.log(`[CLAIM] Island Raid not yet claimable (need ${raidThreshold} notoriety, max is ${currentMaxNotoriety})`);
                 return INVALID_MOVE;
               }
 
               // Award rewards: 4 notoriety + doubloons on chart
               gainNotoriety(player, islandRaid.notorietyReward);
               gainDoubloons(player, islandRaid.doubloonsOnChart);
-              console.log(`[CLAIM] Claimed Island Raid: +${islandRaid.notorietyReward} notoriety, +${islandRaid.doubloonsOnChart} doubloons`);
               break;
             }
 
@@ -1274,14 +1212,12 @@ export const NotoriousGame: Game<NotoriousState> = {
               const islandB = getIslandByName(G.board, smugglerRoute.islandB);
 
               if (!islandA || !islandB) {
-                console.log('[CLAIM] One or both islands not found');
                 return INVALID_MOVE;
               }
 
               // Find path between islands
               const path = findPathOnBoard(G.board, islandA.hexCoord, islandB.hexCoord);
               if (path.length === 0) {
-                console.log('[CLAIM] No path exists between islands');
                 return INVALID_MOVE;
               }
 
@@ -1289,7 +1225,6 @@ export const NotoriousGame: Game<NotoriousState> = {
               for (const hexCoord of path) {
                 const playerShips = getPlayerShips(G.board, hexCoord, ctx.currentPlayer);
                 if (playerShips.length === 0) {
-                  console.log(`[CLAIM] Need a ship at (${hexCoord.q}, ${hexCoord.r})`);
                   return INVALID_MOVE;
                 }
               }
@@ -1297,12 +1232,10 @@ export const NotoriousGame: Game<NotoriousState> = {
               // Award reward: doubloons equal to path length
               const reward = path.length;
               gainDoubloons(player, reward);
-              console.log(`[CLAIM] Claimed Smuggler Route: +${reward} doubloons`);
               break;
             }
 
             default:
-              console.log('[CLAIM] Unknown chart type');
               return INVALID_MOVE;
           }
 
@@ -1326,7 +1259,6 @@ export const NotoriousGame: Game<NotoriousState> = {
           // Game will end after the round completes
           if (!G.gameEndTriggered && hasPlayerWon(player)) {
             G.gameEndTriggered = true;
-            console.log('[CLAIM] Game end triggered! Finishing round...');
           }
 
           // Don't end turn - player may claim more charts
@@ -1337,7 +1269,6 @@ export const NotoriousGame: Game<NotoriousState> = {
          */
         doneClaiming: ({ G, ctx, events }: { G: NotoriousState; ctx: Ctx; events: any }) => {
           G.piratePhaseTurnsComplete++;
-          console.log(`[PIRATE] Player ${parseInt(ctx.currentPlayer) + 1} done claiming. ${G.piratePhaseTurnsComplete}/${ctx.numPlayers} complete`);
           events?.endTurn();
         }
       },
@@ -1354,11 +1285,9 @@ export const NotoriousGame: Game<NotoriousState> = {
           G.windToken.position = getNextInDirection(
             G.windToken.position, G.windToken.placeDirection, ctx.numPlayers
           );
-          console.log(`[PIRATE] No wind holder — token advanced to position ${G.windToken.position}`);
         }
         // Reset holder for next round
         G.windToken.holder = null;
-        console.log('[PIRATE] Phase ending, returning to PLACE phase');
       },
 
       next: 'place'
@@ -1422,8 +1351,6 @@ export const NotoriousGame: Game<NotoriousState> = {
     });
 
     const winner = playerScores[0];
-    console.log('[GAME END] Final scores:', playerScores);
-    console.log(`[GAME END] Winner: ${winner.playerName} with score ${winner.finalScore}`);
 
     return {
       winner: winner.playerId,

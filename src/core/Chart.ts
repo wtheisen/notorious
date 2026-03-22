@@ -37,6 +37,7 @@ export interface IslandRaidChart extends BaseChart {
   targetIsland: IslandName;
   doubloonsOnChart: number; // Grows by 1 each Pirate Phase
   notorietyReward: number; // Always 4
+  claimThreshold: number; // Notoriety threshold required to claim
   isRevealed: true; // Always public
 }
 
@@ -85,14 +86,15 @@ export class ChartFactory {
   /**
    * Create an Island Raid chart
    */
-  static createIslandRaid(targetIsland: IslandName): IslandRaidChart {
+  static createIslandRaid(targetIsland: IslandName, claimThreshold: number): IslandRaidChart {
     return {
       id: this.generateId(),
       type: ChartType.ISLAND_RAID,
       isRevealed: true, // Island Raids are always public
       targetIsland,
       doubloonsOnChart: 0, // Starts at 0, grows during Pirate Phase
-      notorietyReward: 4 // Always 4 notoriety
+      notorietyReward: 4, // Always 4 notoriety
+      claimThreshold,
     };
   }
 

@@ -42,6 +42,7 @@ export class HexGrid {
   clearAllHighlights() {
     for (const tile of this.tiles.values()) {
       tile.setHighlight('none');
+      tile.setHoverBorder(false);
     }
   }
 

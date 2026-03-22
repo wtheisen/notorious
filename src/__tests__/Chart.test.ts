@@ -25,12 +25,13 @@ describe('ChartFactory', () => {
 
   describe('createIslandRaid', () => {
     it('creates with correct defaults', () => {
-      const chart = ChartFactory.createIslandRaid('Havana');
+      const chart = ChartFactory.createIslandRaid('Havana', 14);
       expect(chart.type).toBe(ChartType.ISLAND_RAID);
       expect(chart.isRevealed).toBe(true);
       expect(chart.targetIsland).toBe('Havana');
       expect(chart.doubloonsOnChart).toBe(0);
       expect(chart.notorietyReward).toBe(4);
+      expect(chart.claimThreshold).toBe(14);
     });
   });
 

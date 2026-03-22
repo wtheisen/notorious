@@ -2,7 +2,7 @@ import { MCTSBot, RandomBot } from 'boardgame.io/ai';
 import { NotoriousState, hexToKey } from '../types/GameState';
 import { ActionType, ShipType, ChartType, GAME_CONSTANTS } from '../../types/GameTypes';
 import { HexCoord, hexEquals } from '../../types/CoordinateTypes';
-import { getPlayerShips, getHex, getHexController, getIslandByName } from '../logic/BoardLogic';
+import { getPlayerShips, getHex, getHexController, getIslandByName, findPathOnBoard } from '../logic/BoardLogic';
 import { getValidNeighbors } from '../../config/HexConstants';
 import { TreasureMapChart, IslandRaidChart, SmugglerRouteChart } from '../../core/Chart';
 
@@ -295,9 +295,19 @@ function generateClaimMoves(G: NotoriousState, playerId: string, player: any): a
       }
       case ChartType.SMUGGLER_ROUTE: {
         const sr = chart as SmugglerRouteChart;
-        // Smuggler routes require ships on every hex of the path between two islands
-        // For AI simplicity, just try to claim — the game will validate
-        moves.push({ move: 'claimChart', args: [{ chartId: chart.id }] });
+        const islandA = getIslandByName(G.board, sr.islandA);
+        const islandB = getIslandByName(G.board, sr.islandB);
+        if (!islandA || !islandB) break;
+        const path = findPathOnBoard(G.board, islandA.hexCoord, islandB.hexCoord);
+        if (path.length === 0) break;
+        // Check player has ships on every hex of the path
+        const allCovered = path.every(h => {
+          const hex = getHex(G.board, h);
+          return hex?.ships.some(s => s.playerId === playerId);
+        });
+        if (allCovered) {
+          moves.push({ move: 'claimChart', args: [{ chartId: chart.id }] });
+        }
         break;
       }
     }
@@ -307,7 +317,7 @@ function generateClaimMoves(G: NotoriousState, playerId: string, player: any): a
   const maxNotoriety = Math.max(...G.players.map(p => p.notoriety));
   for (let i = 0; i < G.chartDeck.islandRaids.length; i++) {
     const raid = G.chartDeck.islandRaids[i] as IslandRaidChart;
-    const threshold = GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[i] ?? GAME_CONSTANTS.ISLAND_RAID_THRESHOLDS[0];
+    const threshold = raid.claimThreshold;
     if (maxNotoriety < threshold) continue;
 
     // Find the island hex

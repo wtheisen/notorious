@@ -3,7 +3,7 @@ import { BoardState } from '../../../game/types/GameState';
 import { HexCoord } from '../../../types/CoordinateTypes';
 import { BasePiratePower } from '../BasePiratePower';
 import { registerPower } from '../PowerRegistry';
-import { getHex } from '../../../game/logic/BoardLogic';
+import { getHex, isAdjacent } from '../../../game/logic/BoardLogic';
 
 /**
  * The Islander
@@ -21,17 +21,12 @@ export class IslanderPower extends BasePiratePower {
     to: HexCoord,
     defaultCheck: () => boolean
   ): boolean {
-    // The Islander ignores island edge restrictions
-    // Just verify both hexes exist and are valid water/port hexes
+    // Must be adjacent (including wrapping), but ignore island edge restrictions
+    if (!isAdjacent(from, to)) return false;
+
     const fromHex = getHex(board, from);
     const toHex = getHex(board, to);
-
-    if (!fromHex || !toHex) {
-      return false;
-    }
-
-    // Can sail to any adjacent hex regardless of island edges
-    return true;
+    return !!(fromHex && toHex);
   }
 }
 
