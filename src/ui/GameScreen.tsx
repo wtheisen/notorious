@@ -5,8 +5,10 @@ import { SceneManager, QualityTier } from '../renderer/SceneManager';
 import { GameRenderer } from '../renderer/GameRenderer';
 import type { NotoriousState } from '../game/types/GameState';
 import { hexToKey, HexCoord, hexEquals } from '../types/CoordinateTypes';
-import { ActionType, ShipType, WindDirection, GAME_CONSTANTS } from '../types/GameTypes';
+import { ActionType, ShipType, WindDirection, GAME_CONSTANTS, ChartType } from '../types/GameTypes';
 import { getReachableHexes } from '../game/logic/SailLogic';
+import { getPlayerShips, getHexController, findPathOnBoard, getIslandByName } from '../game/logic/BoardLogic';
+import { TreasureMapChart, SmugglerRouteChart, AnyChart } from '../core/Chart';
 import './hud/hud.css';
 import { ActionBar } from './hud/ActionBar';
 import { PlayerPanel } from './hud/PlayerPanel';
@@ -30,6 +32,26 @@ import {
   getHighlightsForMode,
   type SailMove,
 } from './hooks/useInteractionMode';
+
+function canClaimChart(chart: AnyChart, G: NotoriousState, playerId: string): boolean {
+  if (chart.type === ChartType.TREASURE_MAP) {
+    const tm = chart as unknown as TreasureMapChart;
+    const ships = getPlayerShips(G.board, tm.targetHex, playerId);
+    const hasGalleon = ships.some(s => s.type === ShipType.GALLEON);
+    const controller = getHexController(G.board, tm.targetHex);
+    return hasGalleon && controller === playerId;
+  }
+  if (chart.type === ChartType.SMUGGLER_ROUTE) {
+    const sr = chart as unknown as SmugglerRouteChart;
+    const islandA = getIslandByName(G.board, sr.islandA);
+    const islandB = getIslandByName(G.board, sr.islandB);
+    if (!islandA || !islandB) return false;
+    const path = findPathOnBoard(G.board, islandA.hexCoord, islandB.hexCoord);
+    if (path.length === 0) return false;
+    return path.every(hexCoord => getPlayerShips(G.board, hexCoord, playerId).length > 0);
+  }
+  return false;
+}
 
 export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -465,30 +487,27 @@ export function GameScreen({ G, ctx, moves }: BoardProps<NotoriousState>) {
             </button>
           </div>
 
-          {currentPlayer.charts.length > 0 && (() => {
-            // Check if player has any galleon on the board (minimum requirement to claim)
-            const hasGalleonOnBoard = Object.values(G.board.hexes).some(hex =>
-              hex.ships.some(s => s.playerId === ctx.currentPlayer && s.type === 'GALLEON')
-            );
-            return (
-              <div style={{ marginBottom: 10 }}>
-                <div className="pirate-panel__section-label">Your charts</div>
-                {currentPlayer.charts.map(chart => (
+          {currentPlayer.charts.length > 0 && (
+            <div style={{ marginBottom: 10 }}>
+              <div className="pirate-panel__section-label">Your charts</div>
+              {currentPlayer.charts.map(chart => {
+                const claimable = canClaimChart(chart as AnyChart, G, ctx.currentPlayer);
+                return (
                   <div key={chart.id} className="claim-row"
                     style={{ borderLeft: `3px solid ${chartColor(chart)}` }}>
                     <span>{chartLabel(chart)}</span>
                     <button
-                      className={`hud-btn claim-btn ${hasGalleonOnBoard ? 'hud-btn--confirm' : ''}`}
-                      disabled={!hasGalleonOnBoard}
-                      title={hasGalleonOnBoard ? 'Claim this chart' : 'Need a galleon on the board to claim'}
+                      className={`hud-btn claim-btn ${claimable ? 'hud-btn--confirm' : ''}`}
+                      disabled={!claimable}
+                      title={claimable ? 'Claim this chart' : 'Requirements not met to claim this chart'}
                       onClick={() => moves.claimChart({ chartId: chart.id })}>
                       Claim
                     </button>
                   </div>
-                ))}
-              </div>
-            );
-          })()}
+                );
+              })}
+            </div>
+          )}
 
           {G.chartDeck.islandRaids.length > 0 && (() => {
             const maxNot = Math.max(...G.players.map(p => p.notoriety));
