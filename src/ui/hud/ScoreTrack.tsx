@@ -81,7 +81,7 @@ export function ScoreTrack({ players, currentPlayerId }: ScoreTrackProps) {
             const colors = CUBE_COLORS[player.color] || CUBE_COLORS[PlayerColor.BLUE];
             const isActive = player.id === currentPlayerId;
             const stackOffset = group.length > 1
-              ? (stackIdx - (group.length - 1) / 2) * 12
+              ? (stackIdx - (group.length - 1) / 2) * 18
               : 0;
 
             return (
