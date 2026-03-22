@@ -65,8 +65,10 @@ export function getInstruction(
     case 'pirate': return 'Claim charts or click Done';
     case 'wind_token_decision': return 'You hold the Wind Token — choose position and direction';
     case 'idle':
-      if (phase === 'play' && currentPlayer.placedCaptains.length > 0)
-        return 'Choose an action, or drag a ship to sail';
+      if (phase === 'play' && currentPlayer.placedCaptains.length > 0) {
+        const hasSail = currentPlayer.placedCaptains.includes(ActionType.SAIL);
+        return hasSail ? 'Choose an action, or drag a ship to sail' : 'Choose an action to execute';
+      }
       return '';
     default: return '';
   }
